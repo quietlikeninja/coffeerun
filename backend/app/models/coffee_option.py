@@ -25,7 +25,7 @@ class CoffeeOption(Base):
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     colleague: Mapped["Colleague"] = relationship(back_populates="coffee_options")
     drink_type: Mapped["DrinkType"] = relationship(lazy="selectin")
