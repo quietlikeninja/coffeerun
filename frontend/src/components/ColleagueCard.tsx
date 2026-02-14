@@ -45,7 +45,7 @@ export function ColleagueCard({
                 <Select
                   value={selectedOptionId}
                   onChange={(e) => onOptionChange(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-8 py-1 text-sm"
                   aria-label={`Coffee for ${colleague.name}`}
                 >
                   {options.map((opt) => (
