@@ -24,7 +24,7 @@ async def send_magic_link_email(email: str, token: str) -> None:
     resend.api_key = settings.resend_api_key
     resend.Emails.send(
         {
-            "from": "CoffeeRun <noreply@coffeerun.app>",
+            "from": "CoffeeRun <noreply@ftt.qlndemo.com>",
             "to": [email],
             "subject": "Your CoffeeRun login link",
             "html": f"""
