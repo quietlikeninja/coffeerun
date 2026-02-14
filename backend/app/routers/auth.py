@@ -36,7 +36,7 @@ async def verify(
         key="access_token",
         value=token,
         httponly=True,
-        samesite="lax",
+        samesite="none",
         secure=True,
         max_age=7 * 24 * 60 * 60,
     )
