@@ -216,6 +216,7 @@ The application is feature-complete at MVP level and deployed to production.
 - Vercel + Railway deployment with PostgreSQL
 
 **Not yet implemented:**
+- Change hosting
 - Automated test suite (no tests currently exist)
 - Graphical charts in the analytics dashboard (currently rendered as lists)
 - Sentry error tracking (configured but not activated in `main.py`)
