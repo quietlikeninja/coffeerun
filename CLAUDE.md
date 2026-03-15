@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CoffeeRun is a team coffee ordering app. Users create daily orders for colleagues, share them via link, and track order history. The stack is React 19 + TypeScript (frontend on Vercel) and FastAPI + PostgreSQL (backend on Railway).
+CoffeeRun is a team coffee ordering app. Users create daily orders for colleagues, share them via link, and track order history. The stack is React 19 + TypeScript (frontend on Vercel) and FastAPI + PostgreSQL (backend self-hosted on Docker, core-docker-01).
 
 ## Commands
 
@@ -59,6 +59,6 @@ ruff check .
 - `MagicLinkToken` is consumed on verify and expires after `MAGIC_LINK_EXPIRY_MINUTES`
 
 ### Deployment
-- **Railway** (backend): `Procfile` runs `alembic upgrade head` then starts Uvicorn on `$PORT`
+- **Docker/Dockge** (backend): compose entrypoint runs `alembic upgrade head` then starts gunicorn; image is built by GitHub Actions on push to `main` and pushed to GHCR (`ghcr.io/quietlikeninja/coffeerun:latest`)
 - **Vercel** (frontend): `vercel.json` rewrites all routes to `index.html` for SPA routing
-- Cookie is `SameSite=None; Secure` to support cross-origin requests between Vercel and Railway domains
+- Cookie is `SameSite=None; Secure` to support cross-origin requests between Vercel and the homelab domain

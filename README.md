@@ -20,7 +20,7 @@ A web application for managing daily office coffee orders. Each morning, select 
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic |
 | Database | PostgreSQL (production), SQLite (development) |
 | Auth | Magic links via Resend, JWT in httpOnly cookies |
-| Hosting | Vercel (frontend), Railway (backend + database) |
+| Hosting | Vercel (frontend), Docker / homelab (backend + database) |
 | Monitoring | Sentry, Vercel Analytics |
 
 ## Project Structure
@@ -39,7 +39,7 @@ coffeerun/
 │   │   └── middleware/       # JWT validation
 │   ├── alembic/              # Database migrations
 │   ├── requirements.txt
-│   ├── Procfile              # Railway start command
+│   ├── Procfile              # Legacy Railway start command (superseded by compose entrypoint)
 │   └── .env.example
 └── frontend/
     ├── src/
@@ -164,12 +164,12 @@ All routes are prefixed `/api/v1`. Role requirements: **A** = Admin, **V** = Vie
 
 ## Deployment
 
-The application is deployed with the frontend on Vercel and the backend on Railway.
+The application is deployed with the frontend on Vercel and the backend self-hosted on Docker.
 
 ```
-Vercel (React SPA)  ──API──►  Railway (FastAPI)  ──►  Railway (PostgreSQL)
-                                       │
-                                       └──SMTP──►  Resend (Email)
+Vercel (React SPA)  ──API──►  Caddy (core-docker-01)  ──►  cr-api (Docker)  ──►  cr-db (PostgreSQL, Docker)
+                                                                    │
+                                                                    └──SMTP──►  Resend (Email)
 ```
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the full step-by-step deployment guide.
@@ -213,10 +213,9 @@ The application is feature-complete at MVP level and deployed to production.
 - Admin CRUD for colleagues, coffee options, and menu items
 - Analytics dashboard (order frequency, top drinks, per-colleague stats)
 - Mobile-responsive UI
-- Vercel + Railway deployment with PostgreSQL
+- Vercel + Docker/homelab deployment with PostgreSQL
 
 **Not yet implemented:**
-- Change hosting
 - Automated test suite (no tests currently exist)
 - Graphical charts in the analytics dashboard (currently rendered as lists)
 - Sentry error tracking (configured but not activated in `main.py`)

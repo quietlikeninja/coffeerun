@@ -282,7 +282,7 @@ The `frontend/vercel.json` rewrite rule ensures SPA routing works for all client
 2. Verify your sending domain
 3. Create an API key
 4. Set `RESEND_API_KEY` in the Dockge `.env`
-5. Update the from address in `backend/app/services/email.py` to match your verified domain
+5. Set `EMAIL_FROM` in the Dockge `.env` to match your verified sending domain (e.g. `CoffeeRun <noreply@yourdomain.com>`)
 
 ### Post-Deployment Checklist
 
