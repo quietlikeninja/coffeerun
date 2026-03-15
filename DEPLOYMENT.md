@@ -203,6 +203,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM}
       ENVIRONMENT: "production"
       SENTRY_DSN: ${SENTRY_DSN:-}
+      PYTHONPATH: /app
     ports:
       - 8002:8000
     networks:
