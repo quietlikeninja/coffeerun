@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.user import MagicLinkToken, User, UserRole
+from app.models.user import MagicLinkToken, User
 
 ALGORITHM = "HS256"
 
@@ -24,12 +24,11 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_jwt(user_id: uuid.UUID, email: str, role: str) -> str:
+def create_jwt(user_id: uuid.UUID, email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_expiry_days)
     payload = {
         "sub": str(user_id),
         "email": email,
-        "role": role,
         "exp": expire,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
@@ -43,13 +42,12 @@ def decode_jwt(token: str) -> dict | None:
 
 
 async def get_or_create_user(db: AsyncSession, email: str) -> User:
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
     if user:
         return user
 
-    role = UserRole.admin if email.lower() == settings.admin_email.lower() else UserRole.viewer
-    user = User(email=email.lower(), role=role)
+    user = User(email=email.lower())
     db.add(user)
     await db.flush()
     return user

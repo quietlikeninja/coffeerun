@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import auth, coffee_options, colleagues, menu, orders, stats
+from app.routers import auth, coffee_options, colleagues, menu, orders, stats, teams
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.include_router(coffee_options.router, prefix="/api/v1")
 app.include_router(menu.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
+app.include_router(teams.router, prefix="/api/v1")
 
 
 @app.get("/api/health")
