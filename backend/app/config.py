@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_expiry_days: int = 7
     magic_link_expiry_minutes: int = 15
     frontend_url: str = "http://localhost:5173"
+    email_from: str = "CoffeeRun <noreply@example.com>"
     sentry_dsn: str = ""
     environment: str = "development"
 

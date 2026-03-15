@@ -168,27 +168,60 @@ Create a new stack in Dockge with this compose configuration:
 
 ```yaml
 services:
-  cr-api:
-    image: ghcr.io/quietlikeninja/coffeerun:latest
-    env_file: .env
-    ports:
-      - "8002:8000"
-    depends_on:
-      - cr-db
-    restart: unless-stopped
-
-  cr-db:
+  db:
     image: postgres:16-alpine
+    container_name: cr-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: coffeerun
       POSTGRES_USER: coffeerun
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - cr-db-data:/var/lib/postgresql/data
+    networks:
+      - cr-internal
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U coffeerun -d coffeerun
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  api:
+    image: ghcr.io/quietlikeninja/coffeerun:latest
+    container_name: cr-api
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://coffeerun:${POSTGRES_PASSWORD}@db:5432/coffeerun
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
+      ENVIRONMENT: "production"
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - 8002:8000
+    networks:
+      - cr-internal
+    entrypoint: |
+      sh -c "
+        echo 'Running database migrations...' &&
+        alembic upgrade head &&
+        echo 'Starting application...' &&
+        exec gunicorn app.main:app
+      "
+
+networks:
+  cr-internal:
+    driver: bridge
 
 volumes:
   cr-db-data:
+    driver: local
 ```
 
 #### 3. Dockge `.env`
@@ -196,13 +229,13 @@ volumes:
 Set the following in Dockge's env editor:
 
 ```
-DATABASE_URL=postgresql://coffeerun:<password>@cr-db:5432/coffeerun
-POSTGRES_PASSWORD=<same password as above>
+POSTGRES_PASSWORD=<generate: openssl rand -hex 32>
 ADMIN_EMAIL=your-admin@example.com
 JWT_SECRET=<generate: openssl rand -hex 32>
 FRONTEND_URL=https://coffeerun.qlndemo.com
 RESEND_API_KEY=re_xxxxxxxxxxxx
-ENVIRONMENT=production
+EMAIL_FROM=noreply@yourdomain.com
+SENTRY_DSN=
 ```
 
 #### 4. Deploying an update
