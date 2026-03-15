@@ -11,8 +11,8 @@ CoffeeRun is a single-team web application for managing daily office coffee orde
 | Layer | Technology | Hosting |
 |-------|-----------|---------|
 | Frontend | React (Vite SPA), Tailwind CSS, shadcn/ui | Vercel |
-| Backend | Python, FastAPI | Railway |
-| Database | PostgreSQL | Railway |
+| Backend | Python, FastAPI | Docker / homelab |
+| Database | PostgreSQL | Docker / homelab |
 | ORM | SQLAlchemy + Alembic | — |
 | Auth | Email magic links via Resend | — |
 | Error Tracking | Sentry (frontend + backend) | — |
@@ -21,8 +21,8 @@ CoffeeRun is a single-team web application for managing daily office coffee orde
 ### Deployment Topology
 
 - **Frontend**: Vite-built static SPA deployed to Vercel. Includes `@vercel/analytics` and `@sentry/react`.
-- **Backend**: FastAPI application deployed to Railway. Exposes a REST API. Includes `sentry-sdk[fastapi]`.
-- **Database**: PostgreSQL instance on Railway, connected to the backend via Railway's internal networking.
+- **Backend**: FastAPI application running in Docker on core-docker-01, fronted by Caddy reverse proxy. Includes `sentry-sdk[fastapi]`.
+- **Database**: PostgreSQL instance in Docker on core-docker-01, connected to the backend via an internal Docker network.
 - **Tenancy**: Single-team. One deployment = one team. No multi-tenancy.
 
 ---
@@ -46,7 +46,7 @@ CoffeeRun is a single-team web application for managing daily office coffee orde
 
 ### Admin Seeding
 
-- The admin email is set via the `ADMIN_EMAIL` environment variable on Railway.
+- The admin email is set via the `ADMIN_EMAIL` environment variable.
 - When that email first logs in, the account is automatically assigned the admin role.
 - All other emails that log in are assigned the viewer role.
 - Admin can promote other users to admin via the UI.
@@ -367,13 +367,14 @@ Same as display format, one line per item, plain text. Example:
 
 ## Environment Variables
 
-### Backend (Railway)
+### Backend (Docker / Dockge)
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string (provided by Railway) |
+| `DATABASE_URL` | PostgreSQL connection string |
 | `ADMIN_EMAIL` | Email address of the initial admin user |
 | `RESEND_API_KEY` | API key for Resend email service |
+| `EMAIL_FROM` | From address for outgoing emails (e.g. `CoffeeRun <noreply@yourdomain.com>`) |
 | `JWT_SECRET` | Secret key for signing JWTs |
 | `FRONTEND_URL` | Vercel frontend URL (for CORS and magic link URLs) |
 | `SENTRY_DSN` | Sentry DSN for backend |
@@ -383,7 +384,7 @@ Same as display format, one line per item, plain text. Example:
 
 | Variable | Description |
 |----------|-------------|
-| `VITE_API_URL` | Railway backend URL |
+| `VITE_API_URL` | Backend API URL |
 | `VITE_SENTRY_DSN` | Sentry DSN for frontend |
 | `VITE_ENVIRONMENT` | `production` or `development` |
 
@@ -432,7 +433,7 @@ coffeerun/
 │   │       ├── __init__.py
 │   │       └── auth.py
 │   ├── requirements.txt
-│   ├── Procfile                 # Railway deployment
+│   ├── Procfile                 # Legacy Railway start command (superseded by compose entrypoint)
 │   └── pyproject.toml
 ├── frontend/
 │   ├── public/
