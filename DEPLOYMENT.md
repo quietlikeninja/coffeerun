@@ -13,13 +13,13 @@
 
 ## Prerequisites
 
-| Tool       | Version  | Notes                         |
-|------------|----------|-------------------------------|
-| Python     | 3.12+    | Backend runtime               |
-| Node.js    | 20 LTS   | Frontend build toolchain      |
-| npm        | 10+      | Comes with Node.js            |
-| PostgreSQL | 15+      | Production database (Railway) |
-| Git        | 2.x      | Version control               |
+| Tool       | Version  | Notes                          |
+|------------|----------|--------------------------------|
+| Python     | 3.12+    | Backend runtime (local dev)    |
+| Node.js    | 20 LTS   | Frontend build toolchain       |
+| npm        | 10+      | Comes with Node.js             |
+| Docker     | 24+      | For building/running container |
+| Git        | 2.x      | Version control                |
 
 ---
 
@@ -33,7 +33,6 @@ cd coffeerun/backend
 # Create and activate virtual environment
 python3 -m venv venv
 source venv/bin/activate  # Linux/macOS
-# venv\Scripts\activate   # Windows
 
 # Install dependencies
 pip install -r requirements.txt
@@ -81,43 +80,42 @@ The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is automatically
 
 ### 4. Local dev defaults
 
-| Setting              | Default Value                  |
-|----------------------|--------------------------------|
-| Database             | SQLite (`./coffeerun.db`)      |
-| Backend URL          | `http://localhost:8000`        |
-| Frontend URL         | `http://localhost:5173`        |
-| Admin email          | `admin@example.com`            |
+| Setting              | Default Value                     |
+|----------------------|-----------------------------------|
+| Database             | SQLite (`./coffeerun.db`)         |
+| Backend URL          | `http://localhost:8000`           |
+| Frontend URL         | `http://localhost:5173`           |
+| Admin email          | `admin@example.com`               |
 | JWT secret           | `dev-secret-change-in-production` |
-| Magic link expiry    | 15 minutes                     |
-| JWT expiry           | 7 days                         |
-| Email delivery       | Printed to console             |
+| Magic link expiry    | 15 minutes                        |
+| JWT expiry           | 7 days                            |
+| Email delivery       | Printed to console                |
 
 ---
 
 ## Environment Variables
 
-### Backend (Railway / Server)
+### Backend (Docker / Server)
 
-| Variable                    | Required | Default                          | Description                                       |
-|-----------------------------|----------|----------------------------------|---------------------------------------------------|
-| `DATABASE_URL`              | Yes      | `sqlite:///./coffeerun.db`       | PostgreSQL connection string for production        |
-| `ADMIN_EMAIL`               | Yes      | `admin@example.com`              | Email of the initial admin user                    |
-| `JWT_SECRET`                | Yes      | `dev-secret-change-in-production`| Secret key for signing JWTs. **Must change in prod** |
-| `FRONTEND_URL`              | Yes      | `http://localhost:5173`          | Frontend URL for CORS and magic link URLs          |
-| `RESEND_API_KEY`            | No*      | _(empty)_                        | Resend API key for sending emails. *Required in prod |
-| `SENTRY_DSN`                | No       | _(empty)_                        | Sentry DSN for backend error tracking              |
-| `ENVIRONMENT`               | No       | `development`                    | `development` or `production`                      |
-| `JWT_EXPIRY_DAYS`           | No       | `7`                              | JWT token lifetime in days                         |
-| `MAGIC_LINK_EXPIRY_MINUTES` | No       | `15`                             | Magic link token lifetime in minutes               |
-| `PORT`                      | No       | `8000`                           | Server port (auto-set by Railway)                  |
+| Variable                    | Required | Default                           | Description                                          |
+|-----------------------------|----------|-----------------------------------|------------------------------------------------------|
+| `DATABASE_URL`              | Yes      | `sqlite:///./coffeerun.db`        | PostgreSQL connection string for production          |
+| `ADMIN_EMAIL`               | Yes      | `admin@example.com`               | Email of the initial admin user                      |
+| `JWT_SECRET`                | Yes      | `dev-secret-change-in-production` | Secret key for signing JWTs. **Must change in prod** |
+| `FRONTEND_URL`              | Yes      | `http://localhost:5173`           | Frontend URL for CORS and magic link URLs            |
+| `RESEND_API_KEY`            | No*      | _(empty)_                         | Resend API key for sending emails. *Required in prod |
+| `SENTRY_DSN`                | No       | _(empty)_                         | Sentry DSN for backend error tracking                |
+| `ENVIRONMENT`               | No       | `development`                     | `development` or `production`                        |
+| `JWT_EXPIRY_DAYS`           | No       | `7`                               | JWT token lifetime in days                           |
+| `MAGIC_LINK_EXPIRY_MINUTES` | No       | `15`                              | Magic link token lifetime in minutes                 |
 
 ### Frontend (Vercel / Static Hosting)
 
-| Variable          | Required | Default                   | Description                      |
-|-------------------|----------|---------------------------|----------------------------------|
-| `VITE_API_URL`    | Yes      | `http://localhost:8000`   | Backend API base URL             |
-| `VITE_SENTRY_DSN` | No       | _(empty)_                 | Sentry DSN for frontend tracking |
-| `VITE_ENVIRONMENT`| No       | _(empty)_                 | Environment tag for Sentry       |
+| Variable          | Required | Default                 | Description                      |
+|-------------------|----------|-------------------------|----------------------------------|
+| `VITE_API_URL`    | Yes      | `http://localhost:8000` | Backend API base URL             |
+| `VITE_SENTRY_DSN` | No       | _(empty)_               | Sentry DSN for frontend tracking |
+| `VITE_ENVIRONMENT`| No       | _(empty)_               | Environment tag for Sentry       |
 
 > **Note:** Frontend env vars prefixed with `VITE_` are embedded at build time by Vite. They must be set before running `npm run build`.
 
@@ -130,10 +128,18 @@ The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is automatically
 ```
 ┌──────────────┐     HTTPS      ┌──────────────┐     Internal     ┌──────────────┐
 │              │ ──────────────► │              │ ───────────────► │              │
-│   Vercel     │                 │   Railway    │                  │  PostgreSQL  │
-│  (Frontend)  │   API calls     │  (Backend)   │   DATABASE_URL   │  (Railway)   │
-│              │ ◄────────────── │              │ ◄─────────────── │              │
-└──────────────┘                 └──────────────┘                  └──────────────┘
+│   Vercel     │                 │    Caddy     │                  │  PostgreSQL  │
+│  (Frontend)  │   API calls     │  (Reverse    │   DATABASE_URL   │  (Docker)    │
+│              │ ◄────────────── │   Proxy)     │ ◄─────────────── │              │
+└──────────────┘                 └──────┬───────┘                  └──────────────┘
+                                        │
+                                        │ proxy
+                                        ▼
+                                 ┌──────────────┐
+                                 │  cr-api      │
+                                 │  (Docker,    │
+                                 │   port 8002) │
+                                 └──────────────┘
                                         │
                                         │ SMTP
                                         ▼
@@ -143,68 +149,69 @@ The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is automatically
                                  └──────────────┘
 ```
 
-### Backend — Railway
+### Backend — Docker (Dockge on core-docker-01)
 
-#### 1. Create a Railway project
+#### 1. How the image is built
 
-- Sign in to [Railway](https://railway.app) and create a new project
-- Add a **PostgreSQL** database service — Railway provides `DATABASE_URL` automatically
-- Add a new service from your GitHub repo, pointing to the `backend/` directory
-
-#### 2. Configure build settings
-
-In Railway service settings:
-
-| Setting           | Value                          |
-|-------------------|--------------------------------|
-| Root directory    | `backend`                      |
-| Build command     | `pip install -r requirements.txt` |
-| Start command     | Uses `Procfile` automatically  |
-
-The `Procfile` runs:
-```
-web: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
-```
-
-#### 3. Set environment variables
-
-In Railway service → Variables, set:
+Pushing to `main` automatically triggers the GitHub Actions workflow (`.github/workflows/docker-publish.yml`), which builds the Docker image from `backend/` and pushes it to GHCR:
 
 ```
-ADMIN_EMAIL=your-admin@yourcompany.com
-JWT_SECRET=<generate a strong random string: openssl rand -hex 32>
-FRONTEND_URL=https://your-app.vercel.app
+ghcr.io/quietlikeninja/coffeerun:latest
+ghcr.io/quietlikeninja/coffeerun:sha-<commit>
+```
+
+The image runs `alembic upgrade head` before starting gunicorn, so migrations are applied automatically on every container start.
+
+#### 2. Dockge compose stack
+
+Create a new stack in Dockge with this compose configuration:
+
+```yaml
+services:
+  cr-api:
+    image: ghcr.io/quietlikeninja/coffeerun:latest
+    env_file: .env
+    ports:
+      - "8002:8000"
+    depends_on:
+      - cr-db
+    restart: unless-stopped
+
+  cr-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: coffeerun
+      POSTGRES_USER: coffeerun
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - cr-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  cr-db-data:
+```
+
+#### 3. Dockge `.env`
+
+Set the following in Dockge's env editor:
+
+```
+DATABASE_URL=postgresql://coffeerun:<password>@cr-db:5432/coffeerun
+POSTGRES_PASSWORD=<same password as above>
+ADMIN_EMAIL=your-admin@example.com
+JWT_SECRET=<generate: openssl rand -hex 32>
+FRONTEND_URL=https://coffeerun.qlndemo.com
 RESEND_API_KEY=re_xxxxxxxxxxxx
 ENVIRONMENT=production
 ```
 
-`DATABASE_URL` is automatically injected by Railway when you link the PostgreSQL service.
+#### 4. Deploying an update
 
-#### 4. Run database migrations
+When a new image is pushed (automatically on merge to `main`):
 
-After the first deploy, run migrations via Railway CLI or the service shell:
-
-```bash
-PYTHONPATH=. alembic upgrade head
-```
-
-Alternatively, modify the `Procfile` to run migrations before starting:
-
-```
-web: PYTHONPATH=. alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
-```
-
-> **Important:** The initial migration creates all tables and seeds default drink types (Flat White, Long Black, Cappuccino, etc.), sizes (Small, Regular, Large), and milk options (Full Cream, Skim, Soy, Oat, Almond).
-
-#### 5. PostgreSQL driver note
-
-The backend uses `psycopg2-binary` for PostgreSQL. The database URL is automatically converted from `postgresql://` to the async `postgresql+asyncpg://` format. However, `asyncpg` is not currently in the requirements. For production PostgreSQL, add `asyncpg` to `requirements.txt`:
-
-```
-asyncpg>=0.30.0
-```
-
-Or alternatively, keep using the synchronous driver by updating `database.py` to not transform the URL for PostgreSQL (the current aiosqlite setup works for SQLite dev).
+1. In Dockge, open the `coffeerun` stack
+2. Pull the new image: click **Pull** (or run `docker compose pull` in the stack directory)
+3. Restart the stack — migrations run automatically on startup
 
 ### Frontend — Vercel
 
@@ -217,57 +224,44 @@ Or alternatively, keep using the synchronous driver by updating `database.py` to
 
 Vercel auto-detects Vite projects. Confirm these settings:
 
-| Setting          | Value             |
-|------------------|-------------------|
-| Framework Preset | Vite              |
-| Root Directory   | `frontend`        |
-| Build Command    | `npm run build`   |
-| Output Directory | `dist`            |
-| Install Command  | `npm install`     |
+| Setting          | Value           |
+|------------------|-----------------|
+| Framework Preset | Vite            |
+| Root Directory   | `frontend`      |
+| Build Command    | `npm run build` |
+| Output Directory | `dist`          |
+| Install Command  | `npm install`   |
 
 #### 3. Set environment variables
 
 In Vercel → Project Settings → Environment Variables:
 
 ```
-VITE_API_URL=https://your-backend.up.railway.app
+VITE_API_URL=https://api-coffeerun.qlndemo.com
 ```
 
-#### 4. Configure rewrites for SPA routing
-
-Create `frontend/vercel.json`:
-
-```json
-{
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
-```
-
-This ensures client-side routing works (e.g., `/login`, `/order/123`, `/shared/abc`).
+The `frontend/vercel.json` rewrite rule ensures SPA routing works for all client-side routes.
 
 ### Resend (Email Service)
 
 1. Sign up at [resend.com](https://resend.com)
-2. Verify your sending domain (or use the sandbox for testing)
+2. Verify your sending domain
 3. Create an API key
-4. Set `RESEND_API_KEY` in the Railway backend environment
-5. Emails are sent from `CoffeeRun <noreply@coffeerun.app>` — update the from address in `backend/app/services/email.py` to match your verified domain
+4. Set `RESEND_API_KEY` in the Dockge `.env`
+5. Update the from address in `backend/app/services/email.py` to match your verified domain
 
 ### Post-Deployment Checklist
 
-- [ ] Backend starts and `/api/health` returns `{"status": "ok"}`
-- [ ] Database migrations have run (`alembic upgrade head`)
+- [ ] GitHub Actions build succeeded and image is on GHCR
+- [ ] `cr-api` and `cr-db` containers are running in Dockge
+- [ ] `/api/health` returns `{"status": "ok"}`
+- [ ] Database migrations have run (check container logs on startup)
 - [ ] Seed data is present (drink types, sizes, milk options)
 - [ ] Frontend loads and shows the login page
-- [ ] `FRONTEND_URL` matches the actual Vercel deployment URL
-- [ ] `VITE_API_URL` matches the actual Railway deployment URL
-- [ ] CORS is working (no browser console errors on API calls)
+- [ ] `FRONTEND_URL` matches the actual Vercel deployment URL (for CORS)
+- [ ] `VITE_API_URL` matches the Caddy/tunnel URL for the backend
 - [ ] Magic link emails are delivered via Resend
 - [ ] Admin user can log in with `ADMIN_EMAIL` and sees admin nav items
-- [ ] JWT cookies are set with `httpOnly`, `Secure`, and `SameSite=Lax`
-- [ ] Shared order links (`/shared/{token}`) work without authentication
 
 ---
 
@@ -275,7 +269,13 @@ This ensures client-side routing works (e.g., `/login`, `/order/123`, `/shared/a
 
 ### Running migrations
 
+Migrations run automatically when the container starts. To run them manually (e.g. for a dry-run check):
+
 ```bash
+# Via Docker exec into the running container
+docker exec -it <cr-api-container-id> sh -c "PYTHONPATH=. alembic upgrade head"
+
+# Or locally from the backend directory
 cd backend
 source venv/bin/activate
 PYTHONPATH=. alembic upgrade head
@@ -289,7 +289,7 @@ After modifying SQLAlchemy models:
 PYTHONPATH=. alembic revision --autogenerate -m "description of change"
 ```
 
-Review the generated file in `alembic/versions/` before running `upgrade head`.
+Review the generated file in `alembic/versions/` before committing.
 
 ### Checking migration status
 
@@ -322,13 +322,13 @@ The backend only allows requests from the URL set in `FRONTEND_URL`. Ensure this
 
 - JWT tokens are stored in httpOnly cookies. Ensure `credentials: 'include'` is set on API requests (this is the default in the API client)
 - In production, cookies require HTTPS (`Secure` flag is set). Ensure both frontend and backend use HTTPS
-- If the frontend and backend are on different domains, cookies may be blocked by browsers. Consider using the same root domain or adjusting `SameSite` settings
+- The cookie is `SameSite=None` to support cross-origin requests between Vercel and the homelab domain
 
 ### Database connection issues
 
 - **Local dev:** SQLite is used by default. The DB file is created at `backend/coffeerun.db`
-- **Production:** Ensure `DATABASE_URL` starts with `postgresql://`. Railway provides this automatically when a PostgreSQL service is linked
-- For async PostgreSQL, ensure `asyncpg` is installed
+- **Production:** Ensure `DATABASE_URL` starts with `postgresql://`. The app converts it to `postgresql+asyncpg://` automatically
+- If the `cr-api` container can't reach `cr-db`, confirm both services are in the same Dockge stack (they share a network automatically)
 
 ### Alembic "Can't find module 'app'"
 
