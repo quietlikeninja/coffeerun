@@ -10,32 +10,32 @@ import { SharedOrder } from '@/pages/SharedOrder'
 import { AdminColleagues } from '@/pages/AdminColleagues'
 import { AdminMenu } from '@/pages/AdminMenu'
 import { Stats } from '@/pages/Stats'
+import { CreateTeam } from '@/pages/CreateTeam'
+import { TeamSettings } from '@/pages/TeamSettings'
+import { InviteAccept } from '@/pages/InviteAccept'
 import { type ReactNode } from 'react'
 import { Coffee } from 'lucide-react'
 
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Coffee className="h-6 w-6 animate-pulse text-primary" />
+    </div>
+  )
+}
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Coffee className="h-6 w-6 animate-pulse text-primary" />
-      </div>
-    )
-  }
+  if (loading) return <LoadingSpinner />
   if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
-function AdminRoute({ children }: { children: ReactNode }) {
-  const { isAdmin, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Coffee className="h-6 w-6 animate-pulse text-primary" />
-      </div>
-    )
-  }
-  if (!isAdmin) return <Navigate to="/" replace />
+function ManagerRoute({ children }: { children: ReactNode }) {
+  const { isOwnerOrManager, loading, user } = useAuth()
+  if (loading) return <LoadingSpinner />
+  if (!user) return <Navigate to="/login" replace />
+  if (!isOwnerOrManager) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -45,6 +45,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/auth/verify" element={<AuthVerify />} />
       <Route path="/shared/:shareToken" element={<SharedOrder />} />
+      <Route path="/invite" element={<InviteAccept />} />
       <Route
         path="/"
         element={
@@ -66,6 +67,26 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/teams/new"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <CreateTeam />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/:teamId/settings"
+        element={
+          <ManagerRoute>
+            <Layout>
+              <TeamSettings />
+            </Layout>
+          </ManagerRoute>
+        }
+      />
+      <Route
         path="/stats"
         element={
           <ProtectedRoute>
@@ -78,21 +99,21 @@ function AppRoutes() {
       <Route
         path="/admin/colleagues"
         element={
-          <AdminRoute>
+          <ManagerRoute>
             <Layout>
               <AdminColleagues />
             </Layout>
-          </AdminRoute>
+          </ManagerRoute>
         }
       />
       <Route
         path="/admin/menu"
         element={
-          <AdminRoute>
+          <ManagerRoute>
             <Layout>
               <AdminMenu />
             </Layout>
-          </AdminRoute>
+          </ManagerRoute>
         }
       />
     </Routes>

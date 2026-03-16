@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, type Order } from '@/api/client'
+import { type Order } from '@/api/client'
+import { useAuth } from '@/hooks/useAuth'
 import { OrderSummary, orderToClipboardText } from '@/components/OrderSummary'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { Copy, Share2, ArrowLeft, Check } from 'lucide-react'
 
 export function OrderView() {
   const { id } = useParams<{ id: string }>()
+  const { teamApi } = useAuth()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -15,8 +17,8 @@ export function OrderView() {
 
   useEffect(() => {
     if (!id) return
-    api.get<Order>(`/orders/${id}`).then(setOrder).catch(() => {}).finally(() => setLoading(false))
-  }, [id])
+    teamApi.get<Order>(`/orders/${id}`).then(setOrder).catch(() => {}).finally(() => setLoading(false))
+  }, [id, teamApi])
 
   const handleCopy = async () => {
     if (!order) return

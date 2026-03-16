@@ -28,12 +28,63 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }
 
+/** Creates a team-scoped API client that prefixes all paths with /teams/{teamId}/ */
+export function createTeamApi(teamId: string) {
+  const prefix = `/teams/${teamId}`
+  return {
+    get: <T>(path: string) => api.get<T>(`${prefix}${path}`),
+    post: <T>(path: string, body?: unknown) => api.post<T>(`${prefix}${path}`, body),
+    put: <T>(path: string, body?: unknown) => api.put<T>(`${prefix}${path}`, body),
+    delete: <T>(path: string) => api.delete<T>(`${prefix}${path}`),
+  }
+}
+
+export type TeamApi = ReturnType<typeof createTeamApi>
+
 // Types matching backend schemas
+
+export interface TeamMembership {
+  team_id: string
+  team_name: string
+  role: 'owner' | 'manager' | 'member'
+}
+
 export interface User {
   id: string
   email: string
-  role: 'admin' | 'viewer'
+  display_name: string | null
+  teams: TeamMembership[]
   created_at: string | null
+}
+
+export interface Team {
+  id: string
+  name: string
+  created_by: string
+  is_active: boolean
+  member_count: number
+  created_at: string
+}
+
+export interface TeamMemberDetail {
+  id: string
+  user_id: string
+  email: string
+  display_name: string | null
+  role: string
+  created_at: string
+}
+
+export interface Invite {
+  id: string
+  team_id: string
+  email: string
+  role: string
+  colleague_id: string | null
+  invited_by: string
+  expires_at: string
+  accepted: boolean
+  created_at: string
 }
 
 export interface DrinkType {

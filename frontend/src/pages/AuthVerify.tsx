@@ -1,25 +1,49 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { api } from '@/api/client'
 import { Coffee } from 'lucide-react'
+
+const PENDING_INVITE_KEY = 'coffeerun_pending_invite'
 
 export function AuthVerify() {
   const [searchParams] = useSearchParams()
-  const { verify } = useAuth()
+  const { verify, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [error, setError] = useState('')
 
+  const token = searchParams.get('token')
+
   useEffect(() => {
-    const token = searchParams.get('token')
-    if (!token) {
-      setError('No token provided')
-      return
-    }
+    if (!token) return
 
     verify(token)
-      .then(() => navigate('/'))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Verification failed'))
-  }, [searchParams, verify, navigate])
+      .then(async () => {
+        // Check for pending invite token
+        const pendingInvite = localStorage.getItem(PENDING_INVITE_KEY)
+        if (pendingInvite) {
+          localStorage.removeItem(PENDING_INVITE_KEY)
+          try {
+            await api.post('/invites/accept', { token: pendingInvite })
+            await refreshUser()
+          } catch {
+            // Invite may have expired — continue to dashboard
+          }
+        }
+        navigate('/')
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Verification failed'))
+  }, [token, verify, navigate, refreshUser])
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-destructive">No token provided</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">

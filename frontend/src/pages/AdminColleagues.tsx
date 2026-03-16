@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
-  api,
   type Colleague,
   type DrinkType,
   type Size,
   type MilkOption,
 } from '@/api/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Plus, Trash2, Star, Pencil } from 'lucide-react'
 
 export function AdminColleagues() {
+  const { teamApi, activeTeamId } = useAuth()
   const [colleagues, setColleagues] = useState<Colleague[]>([])
   const [drinkTypes, setDrinkTypes] = useState<DrinkType[]>([])
   const [sizes, setSizes] = useState<Size[]>([])
@@ -35,10 +36,10 @@ export function AdminColleagues() {
 
   const fetchAll = async () => {
     const [c, dt, s, m] = await Promise.all([
-      api.get<Colleague[]>('/colleagues'),
-      api.get<DrinkType[]>('/menu/drink-types'),
-      api.get<Size[]>('/menu/sizes'),
-      api.get<MilkOption[]>('/menu/milk-options'),
+      teamApi.get<Colleague[]>('/colleagues'),
+      teamApi.get<DrinkType[]>('/menu/drink-types'),
+      teamApi.get<Size[]>('/menu/sizes'),
+      teamApi.get<MilkOption[]>('/menu/milk-options'),
     ])
     setColleagues(c)
     setDrinkTypes(dt)
@@ -47,11 +48,12 @@ export function AdminColleagues() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchAll() }, [])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching sets state after async resolution
+  useEffect(() => { fetchAll() }, [activeTeamId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreateColleague = async () => {
     if (!newName.trim()) return
-    await api.post('/colleagues', { name: newName.trim(), usually_in: newUsuallyIn })
+    await teamApi.post('/colleagues', { name: newName.trim(), usually_in: newUsuallyIn })
     setNewName('')
     setShowNewForm(false)
     fetchAll()
@@ -59,19 +61,19 @@ export function AdminColleagues() {
 
   const handleUpdateColleague = async (id: string) => {
     if (!editName.trim()) return
-    await api.put(`/colleagues/${id}`, { name: editName.trim() })
+    await teamApi.put(`/colleagues/${id}`, { name: editName.trim() })
     setEditingId(null)
     fetchAll()
   }
 
   const handleDeleteColleague = async (id: string) => {
     if (!confirm('Deactivate this colleague?')) return
-    await api.delete(`/colleagues/${id}`)
+    await teamApi.delete(`/colleagues/${id}`)
     fetchAll()
   }
 
   const handleToggleUsuallyIn = async (id: string, usually_in: boolean) => {
-    await api.put(`/colleagues/${id}`, { usually_in })
+    await teamApi.put(`/colleagues/${id}`, { usually_in })
     fetchAll()
   }
 
@@ -83,18 +85,18 @@ export function AdminColleagues() {
     notes: string
     is_default: boolean
   }) => {
-    await api.post(`/colleagues/${colleagueId}/coffee-options`, data)
+    await teamApi.post(`/colleagues/${colleagueId}/coffee-options`, data)
     setCoffeeDialogFor(null)
     fetchAll()
   }
 
   const handleDeleteOption = async (optionId: string) => {
-    await api.delete(`/coffee-options/${optionId}`)
+    await teamApi.delete(`/coffee-options/${optionId}`)
     fetchAll()
   }
 
   const handleSetDefault = async (optionId: string) => {
-    await api.put(`/coffee-options/${optionId}/set-default`)
+    await teamApi.put(`/coffee-options/${optionId}/set-default`)
     fetchAll()
   }
 

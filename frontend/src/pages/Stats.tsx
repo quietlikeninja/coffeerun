@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { api, type StatsOverview, type DrinkStat, type ColleagueStat } from '@/api/client'
+import { type StatsOverview, type DrinkStat, type ColleagueStat } from '@/api/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { BarChart3, Coffee, Users, Calendar } from 'lucide-react'
 
 export function Stats() {
+  const { teamApi, activeTeamId } = useAuth()
   const [overview, setOverview] = useState<StatsOverview | null>(null)
   const [drinks, setDrinks] = useState<DrinkStat[]>([])
   const [colleagueStats, setColleagueStats] = useState<ColleagueStat[]>([])
@@ -14,16 +16,16 @@ export function Stats() {
   useEffect(() => {
     const params = days ? `?days=${days}` : ''
     Promise.all([
-      api.get<StatsOverview>(`/stats/overview${params}`),
-      api.get<DrinkStat[]>(`/stats/drinks${params}`),
-      api.get<ColleagueStat[]>(`/stats/colleagues${params}`),
+      teamApi.get<StatsOverview>(`/stats/overview${params}`),
+      teamApi.get<DrinkStat[]>(`/stats/drinks${params}`),
+      teamApi.get<ColleagueStat[]>(`/stats/colleagues${params}`),
     ]).then(([o, d, c]) => {
       setOverview(o)
       setDrinks(d)
       setColleagueStats(c)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [days])
+  }, [days, teamApi, activeTeamId])
 
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>
 

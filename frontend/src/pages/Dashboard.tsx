@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, type Colleague, type Order } from '@/api/client'
+import { type Colleague, type Order } from '@/api/client'
+import { useAuth } from '@/hooks/useAuth'
 import { ColleagueCard } from '@/components/ColleagueCard'
 import { Button } from '@/components/ui/button'
 import { Coffee } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { NoTeams } from '@/pages/NoTeams'
 
 interface Selection {
   [colleagueId: string]: {
@@ -14,6 +16,7 @@ interface Selection {
 }
 
 export function Dashboard() {
+  const { hasTeam, teamApi, activeTeamId } = useAuth()
   const [colleagues, setColleagues] = useState<Colleague[]>([])
   const [selection, setSelection] = useState<Selection>({})
   const [loading, setLoading] = useState(true)
@@ -21,7 +24,12 @@ export function Dashboard() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    api.get<Colleague[]>('/colleagues').then((data) => {
+    if (!hasTeam) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    teamApi.get<Colleague[]>('/colleagues').then((data) => {
       setColleagues(data)
       const initial: Selection = {}
       for (const c of data) {
@@ -34,7 +42,11 @@ export function Dashboard() {
       setSelection(initial)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [])
+  }, [hasTeam, teamApi, activeTeamId])
+
+  if (!hasTeam && !loading) {
+    return <NoTeams />
+  }
 
   const checkedCount = Object.values(selection).filter((s) => s.checked).length
 
@@ -50,7 +62,7 @@ export function Dashboard() {
 
     setCreating(true)
     try {
-      const order = await api.post<Order>('/orders', { items })
+      const order = await teamApi.post<Order>('/orders', { items })
       navigate(`/order/${order.id}`)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to create order')
@@ -72,7 +84,7 @@ export function Dashboard() {
       <div className="text-center py-12">
         <Coffee className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-lg font-semibold mb-2">No colleagues yet</h2>
-        <p className="text-muted-foreground">Ask an admin to add colleagues and their coffee preferences.</p>
+        <p className="text-muted-foreground">Ask an owner or manager to add colleagues and their coffee preferences.</p>
       </div>
     )
   }

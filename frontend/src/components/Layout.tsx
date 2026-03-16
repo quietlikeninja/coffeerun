@@ -1,22 +1,25 @@
 import { type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { TeamSwitcher } from '@/components/TeamSwitcher'
 import { Coffee, BarChart3, Users, Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isOwnerOrManager, hasTeam } = useAuth()
   const location = useLocation()
 
   const navItems = [
     { to: '/', label: 'Order', icon: Coffee },
-    { to: '/stats', label: 'Stats', icon: BarChart3 },
-    ...(isAdmin
+    ...(isOwnerOrManager
       ? [
+          { to: '/stats', label: 'Stats', icon: BarChart3 },
           { to: '/admin/colleagues', label: 'People', icon: Users },
           { to: '/admin/menu', label: 'Menu', icon: Settings },
         ]
-      : []),
+      : hasTeam
+        ? [{ to: '/stats', label: 'Stats', icon: BarChart3 }]
+        : []),
   ]
 
   return (
@@ -24,10 +27,18 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Header */}
       <header className="border-b bg-card sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-lg text-primary">
-            <Coffee className="h-5 w-5" />
-            CoffeeRun
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2 font-bold text-lg text-primary">
+              <Coffee className="h-5 w-5" />
+              CoffeeRun
+            </Link>
+            {user && hasTeam && (
+              <>
+                <span className="text-muted-foreground">/</span>
+                <TeamSwitcher />
+              </>
+            )}
+          </div>
           {user && (
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground hidden sm:inline">{user.email}</span>
@@ -43,7 +54,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">{children}</main>
 
       {/* Bottom navigation (mobile-first) */}
-      {user && (
+      {user && hasTeam && (
         <nav className="border-t bg-card sticky bottom-0 z-10">
           <div className="max-w-2xl mx-auto flex justify-around">
             {navItems.map(({ to, label, icon: Icon }) => {
