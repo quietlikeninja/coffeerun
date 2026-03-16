@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, type TeamMemberDetail, type Invite, type Team } from '@/api/client'
+import { api, type TeamMemberDetail, type Invite, type Team, type Colleague } from '@/api/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Trash2, UserMinus, Send } from 'lucide-react'
 
 export function TeamSettings() {
-  const { activeTeamId, activeTeam, isOwner, user, refreshUser } = useAuth()
+  const { activeTeamId, activeTeam, isOwner, user, refreshUser, teamApi } = useAuth()
   const navigate = useNavigate()
 
   const [team, setTeam] = useState<Team | null>(null)
@@ -25,7 +25,9 @@ export function TeamSettings() {
   // Invite form
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('member')
+  const [inviteColleagueId, setInviteColleagueId] = useState('')
   const [inviting, setInviting] = useState(false)
+  const [colleagues, setColleagues] = useState<Colleague[]>([])
 
   // Delete confirmation
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -34,14 +36,16 @@ export function TeamSettings() {
   const fetchData = async () => {
     if (!activeTeamId) return
     try {
-      const [t, m, i] = await Promise.all([
+      const [t, m, i, c] = await Promise.all([
         api.get<Team>(`/teams/${activeTeamId}`),
         api.get<TeamMemberDetail[]>(`/teams/${activeTeamId}/members`),
         api.get<Invite[]>(`/teams/${activeTeamId}/invites`),
+        teamApi.get<Colleague[]>('/colleagues'),
       ])
       setTeam(t)
       setMembers(m)
       setInvites(i.filter((inv) => !inv.accepted))
+      setColleagues(c)
       setTeamName(t.name)
     } catch {
       // Error fetching team data
@@ -62,16 +66,17 @@ export function TeamSettings() {
     fetchData()
   }
 
-  const handleChangeRole = async (memberId: string, role: string) => {
+  const handleChangeRole = async (userId: string, role: string) => {
     if (!activeTeamId) return
-    await api.put(`/teams/${activeTeamId}/members/${memberId}`, { role })
+    await api.put(`/teams/${activeTeamId}/members/${userId}`, { role })
+    await refreshUser()
     fetchData()
   }
 
-  const handleRemoveMember = async (memberId: string) => {
+  const handleRemoveMember = async (userId: string) => {
     if (!activeTeamId) return
     if (!confirm('Remove this member from the team?')) return
-    await api.delete(`/teams/${activeTeamId}/members/${memberId}`)
+    await api.delete(`/teams/${activeTeamId}/members/${userId}`)
     fetchData()
   }
 
@@ -82,9 +87,11 @@ export function TeamSettings() {
       await api.post(`/teams/${activeTeamId}/invites`, {
         email: inviteEmail.trim(),
         role: inviteRole,
+        ...(inviteColleagueId ? { colleague_id: inviteColleagueId } : {}),
       })
       setInviteEmail('')
       setInviteRole('member')
+      setInviteColleagueId('')
       fetchData()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to send invite')
@@ -178,7 +185,7 @@ export function TeamSettings() {
                   {canChangeRole ? (
                     <Select
                       value={member.role}
-                      onChange={(e) => handleChangeRole(member.id, e.target.value)}
+                      onChange={(e) => handleChangeRole(member.user_id, e.target.value)}
                       className="w-28 h-8 text-xs"
                       aria-label={`Role for ${member.email}`}
                     >
@@ -193,7 +200,7 @@ export function TeamSettings() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => handleRemoveMember(member.id)}
+                      onClick={() => handleRemoveMember(member.user_id)}
                       className="h-8 w-8 text-destructive"
                       aria-label={`Remove ${member.email}`}
                     >
@@ -214,13 +221,13 @@ export function TeamSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Send invite form */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Input
               type="email"
               placeholder="Email address"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              className="flex-1"
+              className="flex-1 min-w-[180px]"
             />
             <Select
               value={inviteRole}
@@ -231,6 +238,21 @@ export function TeamSettings() {
               <option value="member">Member</option>
               <option value="manager">Manager</option>
             </Select>
+            {colleagues.filter((c) => c.user_id === null && c.is_active).length > 0 && (
+              <Select
+                value={inviteColleagueId}
+                onChange={(e) => setInviteColleagueId(e.target.value)}
+                className="w-40"
+                aria-label="Link to colleague"
+              >
+                <option value="">No link</option>
+                {colleagues
+                  .filter((c) => c.user_id === null && c.is_active)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+              </Select>
+            )}
             <Button size="sm" onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
               <Send className="h-4 w-4 mr-1" />
               {inviting ? '...' : 'Send'}
