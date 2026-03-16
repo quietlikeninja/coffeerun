@@ -5,8 +5,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.middleware.auth import CurrentUser, get_current_user
+from app.middleware.auth import TeamMember, require_role
+from app.models.colleague import Colleague
 from app.models.order import Order, OrderItem
+from app.models.team import TeamRole
 from app.schemas.order import ColleagueStat, DrinkStat, StatsOverview
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -22,23 +24,23 @@ def _get_date_filter(days: int | None):
 async def stats_overview(
     days: int | None = Query(None, description="Filter to last N days"),
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
     date_from = _get_date_filter(days)
-    base_query = select(Order)
+    base_query = select(Order).where(Order.team_id == team_member.team_id)
     if date_from:
         base_query = base_query.where(Order.created_at >= date_from)
 
     # Total orders
-    result = await db.execute(
-        select(func.count()).select_from(base_query.subquery())
-    )
+    result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total_orders = result.scalar() or 0
 
     # Total coffees
-    items_query = select(func.count(OrderItem.id))
+    items_query = (
+        select(func.count(OrderItem.id)).join(Order).where(Order.team_id == team_member.team_id)
+    )
     if date_from:
-        items_query = items_query.join(Order).where(Order.created_at >= date_from)
+        items_query = items_query.where(Order.created_at >= date_from)
     result = await db.execute(items_query)
     total_coffees = result.scalar() or 0
 
@@ -46,7 +48,9 @@ async def stats_overview(
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     result = await db.execute(
         select(func.count()).select_from(
-            select(Order).where(Order.created_at >= week_ago).subquery()
+            select(Order)
+            .where(Order.team_id == team_member.team_id, Order.created_at >= week_ago)
+            .subquery()
         )
     )
     orders_this_week = result.scalar() or 0
@@ -55,17 +59,20 @@ async def stats_overview(
     month_ago = datetime.now(timezone.utc) - timedelta(days=30)
     result = await db.execute(
         select(func.count()).select_from(
-            select(Order).where(Order.created_at >= month_ago).subquery()
+            select(Order)
+            .where(Order.team_id == team_member.team_id, Order.created_at >= month_ago)
+            .subquery()
         )
     )
     orders_this_month = result.scalar() or 0
 
-    # Busiest day of week
+    # Busiest day of week (SQLite-specific; PostgreSQL would use func.extract("dow", ...))
     result = await db.execute(
         select(
             func.strftime("%w", Order.created_at).label("dow"),
             func.count().label("cnt"),
         )
+        .where(Order.team_id == team_member.team_id)
         .group_by("dow")
         .order_by(func.count().desc())
         .limit(1)
@@ -88,44 +95,48 @@ async def stats_drinks(
     days: int | None = Query(None),
     limit: int = Query(10),
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    query = select(
-        OrderItem.drink_type_name,
-        func.count().label("cnt"),
+    query = (
+        select(
+            OrderItem.drink_type_name,
+            func.count().label("cnt"),
+        )
+        .join(Order)
+        .where(Order.team_id == team_member.team_id)
     )
     if days:
         date_from = _get_date_filter(days)
-        query = query.join(Order).where(Order.created_at >= date_from)
-    query = query.group_by(OrderItem.drink_type_name).order_by(
-        func.count().desc()
-    ).limit(limit)
+        query = query.where(Order.created_at >= date_from)
+    query = query.group_by(OrderItem.drink_type_name).order_by(func.count().desc()).limit(limit)
 
     result = await db.execute(query)
-    return [
-        DrinkStat(drink_name=row[0], count=row[1]) for row in result.all()
-    ]
+    return [DrinkStat(drink_name=row[0], count=row[1]) for row in result.all()]
 
 
 @router.get("/colleagues", response_model=list[ColleagueStat])
 async def stats_colleagues(
     days: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    from app.models.colleague import Colleague
-
     # Count orders per colleague
-    query = select(
-        Colleague.name,
-        func.count(OrderItem.id).label("cnt"),
-    ).join(Colleague, OrderItem.colleague_id == Colleague.id)
+    query = (
+        select(
+            Colleague.name,
+            func.count(OrderItem.id).label("cnt"),
+        )
+        .join(Colleague, OrderItem.colleague_id == Colleague.id)
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(
+            Order.team_id == team_member.team_id,
+            Colleague.team_id == team_member.team_id,
+        )
+    )
 
     if days:
         date_from = _get_date_filter(days)
-        query = query.join(Order, OrderItem.order_id == Order.id).where(
-            Order.created_at >= date_from
-        )
+        query = query.where(Order.created_at >= date_from)
 
     query = query.group_by(Colleague.name).order_by(func.count(OrderItem.id).desc())
     result = await db.execute(query)
@@ -137,7 +148,11 @@ async def stats_colleagues(
         fav_query = (
             select(OrderItem.drink_type_name, func.count().label("cnt"))
             .join(Colleague, OrderItem.colleague_id == Colleague.id)
-            .where(Colleague.name == name)
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(
+                Colleague.name == name,
+                Order.team_id == team_member.team_id,
+            )
             .group_by(OrderItem.drink_type_name)
             .order_by(func.count().desc())
             .limit(1)

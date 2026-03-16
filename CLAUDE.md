@@ -6,22 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CoffeeRun is a team coffee ordering app. Users create daily orders for colleagues, share them via link, and track order history. The stack is React 19 + TypeScript (frontend on Vercel) and FastAPI + PostgreSQL (backend self-hosted on Docker, core-docker-01).
 
-**Active work: Multi-team support.** The app is being refactored from a single-team deployment to support multiple independent teams. See `CoffeeRun_MultiTeam_Roadmap_v2.docx` in the project root for the full roadmap. Implementation is split into 5 phases.
+**Active work: Multi-team support.** The app is being refactored from a single-team deployment to support multiple independent teams. See `CoffeeRun_MultiTeam_Roadmap_v2.docx` in the project root for the full roadmap.
 
 ## Current Status
 
-**Phase 1 (Schema & Models) is COMPLETE.** The database schema has been updated:
-- New tables: `teams`, `team_memberships`, `team_invites`
-- New enums: `TeamRole` (owner/manager/member), `ColleagueType` (colleague/visitor)
-- `users` table: `role` column removed, `display_name` added
-- `colleagues`: `team_id`, `user_id`, `colleague_type` added
-- `orders`, `drink_types`, `sizes`, `milk_options`: `team_id` added
-- Menu seeding moved from migration to runtime (`app/services/team.py`)
-- Single clean-slate Alembic migration in `alembic/versions/`
+**Phase 1 (Schema & Models) ✅ COMPLETE.** Multi-team database schema with teams, team_memberships, team_invites tables. Clean-slate Alembic migration.
 
-**Phase 2 (Auth & Team CRUD) is NEXT.** See `CoffeeRun_Phase2_Handoff.docx` for the detailed implementation specification. Key deliverables: updated auth middleware, team CRUD endpoints, membership management, invite system.
+**Phase 2 (Auth & Team CRUD) ✅ COMPLETE.** Auth middleware rewritten with `get_team_member` and `require_role()`. Team CRUD, membership management, and invite system all functional. 82 pytest tests passing.
 
-**The existing routers (colleagues, coffee_options, menu, orders, stats) are currently broken** because they reference the removed `User.role` and don't pass `team_id`. This is expected. Phase 2 fixes auth/middleware; Phase 3 fixes the resource routers.
+**Phase 3 (Scope Existing Endpoints) ← CURRENT.** See `CoffeeRun_Phase3_Handoff.docx` for the detailed implementation specification. Re-mount resource routers under `/teams/{team_id}/`, add team_id filtering, self-service drink editing, visitor support.
+
+**The resource routers (colleagues, coffee_options, menu, orders, stats) are currently broken** — they use the deprecated `require_admin` shim and don't pass `team_id`. Phase 3 fixes them.
 
 ## Commands
 
@@ -45,6 +40,12 @@ alembic revision --autogenerate -m "description"  # Create new migration
 # Format/lint
 ruff format .
 ruff check .
+
+# Run tests
+pytest             # All tests
+pytest -v          # Verbose
+pytest -x          # Stop on first failure
+pytest tests/test_auth.py   # Single file
 ```
 
 ### Environment Setup
@@ -63,7 +64,7 @@ ruff check .
 
 ### Backend
 - **Entry**: `app/main.py` registers all routers under `/api/v1` and mounts CORS middleware
-- **Auth middleware**: `app/middleware/auth.py` provides `get_current_user` FastAPI dependency (reads JWT from cookie). **Being rewritten in Phase 2** to add `get_team_member` and `require_role()`.
+- **Auth middleware**: `app/middleware/auth.py` provides `get_current_user` (any logged-in user), `get_team_member` (resolves team role), and `require_role()` (checks specific roles). The old `require_admin` is a deprecated shim — Phase 3 removes it.
 - **Database**: Async SQLAlchemy 2 with `AsyncSession`; PostgreSQL in production, SQLite in dev; all PKs are UUIDs
 - **Models**: Team-scoped. `Team` owns `Colleague`, `Order`, `DrinkType`, `Size`, `MilkOption` via `team_id` FK. Roles are per-team via `TeamMembership` (not on User).
 - **Order items**: Snapshot drink details at creation time — immutable historical records
@@ -71,50 +72,51 @@ ruff check .
 - **Email service**: `app/services/email.py` sends via Resend; falls back to console logging if API key is absent
 
 ### Key Relationships
-- A `Team` has many `TeamMembership` rows linking to `User` with a `TeamRole`
-- A `Colleague` belongs to a `Team` and optionally links to a `User` (via `user_id`)
+- A `Team` has many `TeamMembership` rows linking to `User` with a `TeamRole` (owner/manager/member)
+- A `Colleague` belongs to a `Team`, has a `colleague_type` (colleague/visitor), and optionally links to a `User` (via `user_id`)
 - A `CoffeeOption` belongs to a `Colleague` and stores their drink preferences
 - An `Order` belongs to a `Team` and has many `OrderItem` rows (denormalized drink snapshots)
-- `MagicLinkToken` is consumed on verify and expires after `MAGIC_LINK_EXPIRY_MINUTES`
+
+### Test Suite
+- pytest with pytest-asyncio and httpx
+- File-based SQLite test database (created/destroyed per session)
+- Factory helpers in `tests/conftest.py`: `create_test_user`, `create_authenticated_client`, `create_team_with_owner`, `add_team_member`
+- 82 tests across 5 files covering auth, teams, members, invites, and services
 
 ### Deployment
-- **Docker/Dockge** (backend): compose entrypoint runs `alembic upgrade head` then starts gunicorn; image is built by GitHub Actions on push to `main` and pushed to GHCR (`ghcr.io/quietlikeninja/coffeerun:latest`)
+- **Docker/Dockge** (backend): compose entrypoint runs `alembic upgrade head` then starts gunicorn; image built by GitHub Actions and pushed to GHCR
 - **Vercel** (frontend): `vercel.json` rewrites all routes to `index.html` for SPA routing
-- Cookie is `SameSite=None; Secure` to support cross-origin requests between Vercel and the homelab domain
+- Cookie is `SameSite=None; Secure` for cross-origin requests between Vercel and homelab
 
 ## Multi-Team Roadmap
 
-The full specification is in `CoffeeRun_MultiTeam_Roadmap_v2.docx`. Phase-specific handoff documents are provided for each phase.
+Full specification in `CoffeeRun_MultiTeam_Roadmap_v2.docx`. Phase-specific handoff documents provided for each phase.
 
 ### Implementation Phases
 1. **Phase 1 — Schema & Models** ✅ COMPLETE
-2. **Phase 2 — Auth & Team CRUD** ← CURRENT. See `CoffeeRun_Phase2_Handoff.docx`
-3. **Phase 3 — Scope Existing Endpoints**: Re-mount all resource routers under `/teams/{team_id}/`, team-scoped queries, visitor support.
+2. **Phase 2 — Auth & Team CRUD** ✅ COMPLETE (82 tests passing)
+3. **Phase 3 — Scope Existing Endpoints** ← CURRENT. See `CoffeeRun_Phase3_Handoff.docx`
 4. **Phase 4 — Frontend: Team Management**: Team switcher, create team, team settings, invite accept, empty state.
 5. **Phase 5 — Frontend: Updated Workflows**: Team-scoped dashboard, visitor creation, self-service drink editing, stats scoping.
 
-### Phase 2 Scope (What to Change)
-- `backend/app/middleware/auth.py` — Remove UserRole refs. Add `get_team_member`, `require_role()`, update `CurrentUser` (no role), add `TeamMember` dataclass
-- `backend/app/services/auth.py` — Remove ADMIN_EMAIL auto-promotion, remove role from JWT, update `get_or_create_user`
-- `backend/app/services/email.py` — Add `send_team_invite_email` function
-- `backend/app/services/team.py` — Add invite generation and acceptance logic (or create separate `invite.py`)
-- `backend/app/schemas/auth.py` — Remove role from UserResponse, add teams list, add `UserTeamMembership`
-- `backend/app/schemas/team.py` — NEW: schemas for teams, memberships, invites
-- `backend/app/routers/auth.py` — Update /verify (no role in JWT), /me (return team memberships)
-- `backend/app/routers/teams.py` — NEW: team CRUD, membership management, invite endpoints
-- `backend/app/main.py` — Register the new teams router
+### Phase 3 Scope (What to Change)
+- `backend/app/routers/colleagues.py` — Re-mount under `/teams/{team_id}/`, team_id filtering, visitor support
+- `backend/app/routers/coffee_options.py` — Re-mount, self-service editing for linked Members
+- `backend/app/routers/menu.py` — Re-mount, team_id filtering on all menu queries
+- `backend/app/routers/orders.py` — Re-mount, team_id on orders. Move shared order endpoint out (not team-scoped)
+- `backend/app/routers/stats.py` — Re-mount, team-scoped queries, Owner/Manager only
+- `backend/app/schemas/colleague.py` — Add colleague_type and user_id to schemas
+- `backend/app/main.py` — Update router registration with team-scoped prefixes
+- `backend/app/middleware/auth.py` — Remove deprecated `require_admin` shim
+- `tests/test_colleagues.py` — NEW: team-scoped colleague CRUD tests
+- `tests/test_coffee_options.py` — NEW: coffee option tests + self-service editing
+- `tests/test_menu.py` — NEW: team-scoped menu management tests
+- `tests/test_orders.py` — NEW: team-scoped order tests
+- `tests/test_stats.py` — NEW: team-scoped stats tests
+- `tests/conftest.py` — Add helper fixtures for colleagues, coffee options, orders
 
-### Phase 2 Scope (What NOT to Change)
-- `backend/app/routers/colleagues.py` — Fixed in Phase 3
-- `backend/app/routers/coffee_options.py` — Fixed in Phase 3
-- `backend/app/routers/menu.py` — Fixed in Phase 3
-- `backend/app/routers/orders.py` — Fixed in Phase 3
-- `backend/app/routers/stats.py` — Fixed in Phase 3
-- `backend/app/schemas/colleague.py` — Fixed in Phase 3
-- `backend/app/schemas/menu.py` — Fixed in Phase 3
-- `backend/app/schemas/order.py` — Fixed in Phase 3
-- All frontend code — Updated in Phases 4/5
-- Database models and migrations — Complete from Phase 1
-
-### Important: Expected Breakage After Phase 2
-After Phase 2, the auth system and team management are fully functional. The old resource routers (colleagues, menu, orders, stats) are **still broken** — they don't pass `team_id` and use the old `require_admin` dependency. This is expected. Phase 3 fixes them by re-mounting under `/teams/{team_id}/`.
+### Phase 3 Scope (What NOT to Change)
+- Auth endpoints and team management endpoints — working from Phase 2
+- Database models and migrations — complete from Phase 1
+- Existing test files (test_auth, test_teams, test_members, test_invites, test_services) — must continue passing
+- All frontend code — updated in Phases 4/5

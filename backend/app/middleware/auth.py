@@ -89,15 +89,3 @@ def require_role(*roles: TeamRole) -> Callable:
         return team_member
 
     return dependency
-
-
-# Backward-compatible shim for Phase 1/2 transition.
-# The old routers (colleagues, menu, coffee_options) import require_admin.
-# This raises 501 at runtime — they'll be properly fixed in Phase 3.
-async def require_admin(
-    current_user: CurrentUser = Depends(get_current_user),
-) -> CurrentUser:
-    raise HTTPException(
-        status_code=501,
-        detail="require_admin is deprecated. Use require_role() with team-scoped endpoints (Phase 3).",
-    )

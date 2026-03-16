@@ -17,9 +17,7 @@ class Order(Base):
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    items: Mapped[list["OrderItem"]] = relationship(
-        back_populates="order", lazy="selectin"
-    )
+    items: Mapped[list["OrderItem"]] = relationship(back_populates="order", lazy="selectin")
     creator: Mapped["User"] = relationship(lazy="selectin")
 
 
@@ -28,9 +26,7 @@ class OrderItem(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), nullable=False)
-    colleague_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("colleagues.id"), nullable=False
-    )
+    colleague_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("colleagues.id"), nullable=False)
     coffee_option_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("coffee_options.id"), nullable=False
     )

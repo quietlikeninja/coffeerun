@@ -173,3 +173,73 @@ async def add_team_member(
     await db.flush()
     await db.commit()
     return membership
+
+
+async def create_colleague(
+    db: AsyncSession,
+    team: Team,
+    name: str,
+    colleague_type: str = "colleague",
+    user_id: uuid.UUID | None = None,
+):
+    from app.models.colleague import Colleague
+
+    colleague = Colleague(
+        id=uuid.uuid4(),
+        team_id=team.id,
+        name=name,
+        colleague_type=colleague_type,
+        user_id=user_id,
+    )
+    db.add(colleague)
+    await db.flush()
+    await db.commit()
+    return colleague
+
+
+async def create_coffee_option(
+    db: AsyncSession,
+    colleague_id: uuid.UUID,
+    drink_type_id: uuid.UUID,
+    size_id: uuid.UUID,
+    milk_option_id: uuid.UUID | None = None,
+    sugar: int = 0,
+    notes: str | None = None,
+    is_default: bool = False,
+):
+    from app.models.coffee_option import CoffeeOption
+
+    option = CoffeeOption(
+        id=uuid.uuid4(),
+        colleague_id=colleague_id,
+        drink_type_id=drink_type_id,
+        size_id=size_id,
+        milk_option_id=milk_option_id,
+        sugar=sugar,
+        notes=notes,
+        is_default=is_default,
+    )
+    db.add(option)
+    await db.flush()
+    await db.commit()
+    return option
+
+
+async def get_menu_ids(db: AsyncSession, team_id: uuid.UUID) -> dict:
+    """Return the first drink_type_id, size_id, milk_option_id for a team."""
+    from sqlalchemy import select as _select
+
+    from app.models.menu import DrinkType, MilkOption, Size
+
+    dt = (
+        await db.execute(_select(DrinkType).where(DrinkType.team_id == team_id).limit(1))
+    ).scalar_one()
+    sz = (await db.execute(_select(Size).where(Size.team_id == team_id).limit(1))).scalar_one()
+    mk = (
+        await db.execute(_select(MilkOption).where(MilkOption.team_id == team_id).limit(1))
+    ).scalar_one()
+    return {
+        "drink_type_id": dt.id,
+        "size_id": sz.id,
+        "milk_option_id": mk.id,
+    }

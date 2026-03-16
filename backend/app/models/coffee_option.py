@@ -12,12 +12,8 @@ class CoffeeOption(Base):
     __tablename__ = "coffee_options"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    colleague_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("colleagues.id"), nullable=False
-    )
-    drink_type_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("drink_types.id"), nullable=False
-    )
+    colleague_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("colleagues.id"), nullable=False)
+    drink_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("drink_types.id"), nullable=False)
     size_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sizes.id"), nullable=False)
     milk_option_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("milk_options.id"), nullable=True

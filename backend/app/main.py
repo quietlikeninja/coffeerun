@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import auth, coffee_options, colleagues, menu, orders, stats, teams
+from app.routers import auth, coffee_options, colleagues, menu, orders, shared_orders, stats, teams
 
 
 @asynccontextmanager
@@ -38,12 +38,15 @@ app.add_middleware(
 
 # Mount routers
 app.include_router(auth.router, prefix="/api/v1")
-app.include_router(colleagues.router, prefix="/api/v1")
-app.include_router(coffee_options.router, prefix="/api/v1")
-app.include_router(menu.router, prefix="/api/v1")
-app.include_router(orders.router, prefix="/api/v1")
-app.include_router(stats.router, prefix="/api/v1")
 app.include_router(teams.router, prefix="/api/v1")
+app.include_router(shared_orders.router, prefix="/api/v1")
+
+# Team-scoped resource routers
+app.include_router(colleagues.router, prefix="/api/v1/teams/{team_id}")
+app.include_router(coffee_options.router, prefix="/api/v1/teams/{team_id}")
+app.include_router(menu.router, prefix="/api/v1/teams/{team_id}")
+app.include_router(orders.router, prefix="/api/v1/teams/{team_id}")
+app.include_router(stats.router, prefix="/api/v1/teams/{team_id}")
 
 
 @app.get("/api/health")
