@@ -17,9 +17,7 @@ export function Layout({ children }: { children: ReactNode }) {
           { to: '/admin/colleagues', label: 'People', icon: Users },
           { to: '/admin/menu', label: 'Menu', icon: Settings },
         ]
-      : hasTeam
-        ? [{ to: '/stats', label: 'Stats', icon: BarChart3 }]
-        : []),
+      : []),
   ]
 
   return (

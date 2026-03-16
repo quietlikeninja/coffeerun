@@ -89,11 +89,11 @@ function AppRoutes() {
       <Route
         path="/stats"
         element={
-          <ProtectedRoute>
+          <ManagerRoute>
             <Layout>
               <Stats />
             </Layout>
-          </ProtectedRoute>
+          </ManagerRoute>
         }
       />
       <Route

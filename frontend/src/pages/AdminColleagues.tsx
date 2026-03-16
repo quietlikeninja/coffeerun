@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { CoffeeOptionPicker } from '@/components/CoffeeOptionPicker'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2, Star, Pencil } from 'lucide-react'
+import { Select } from '@/components/ui/select'
+import { Plus, Trash2, Star, Pencil, ArrowUpCircle } from 'lucide-react'
 
 export function AdminColleagues() {
   const { teamApi, activeTeamId } = useAuth()
@@ -26,6 +27,7 @@ export function AdminColleagues() {
   const [showNewForm, setShowNewForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newUsuallyIn, setNewUsuallyIn] = useState(true)
+  const [newType, setNewType] = useState<'colleague' | 'visitor'>('colleague')
 
   // Edit colleague
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -53,8 +55,14 @@ export function AdminColleagues() {
 
   const handleCreateColleague = async () => {
     if (!newName.trim()) return
-    await teamApi.post('/colleagues', { name: newName.trim(), usually_in: newUsuallyIn })
+    await teamApi.post('/colleagues', {
+      name: newName.trim(),
+      usually_in: newType === 'visitor' ? false : newUsuallyIn,
+      colleague_type: newType,
+    })
     setNewName('')
+    setNewType('colleague')
+    setNewUsuallyIn(true)
     setShowNewForm(false)
     fetchAll()
   }
@@ -74,6 +82,11 @@ export function AdminColleagues() {
 
   const handleToggleUsuallyIn = async (id: string, usually_in: boolean) => {
     await teamApi.put(`/colleagues/${id}`, { usually_in })
+    fetchAll()
+  }
+
+  const handlePromoteToColleague = async (id: string) => {
+    await teamApi.put(`/colleagues/${id}`, { colleague_type: 'colleague' })
     fetchAll()
   }
 
@@ -102,6 +115,126 @@ export function AdminColleagues() {
 
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading...</div>
 
+  const regularColleagues = colleagues.filter((c) => c.colleague_type === 'colleague')
+  const visitorColleagues = colleagues.filter((c) => c.colleague_type === 'visitor')
+
+  const renderColleagueCard = (colleague: Colleague) => (
+    <Card key={colleague.id}>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          {editingId === colleague.id ? (
+            <div className="flex gap-2 flex-1 mr-2">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="h-8"
+                autoFocus
+              />
+              <Button size="sm" onClick={() => handleUpdateColleague(colleague.id)}>Save</Button>
+              <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
+            </div>
+          ) : (
+            <CardTitle className="flex items-center gap-2">
+              {colleague.name}
+              {colleague.colleague_type === 'visitor' && (
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  Visitor
+                </span>
+              )}
+              <button
+                onClick={() => { setEditingId(colleague.id); setEditName(colleague.name) }}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Edit name"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </CardTitle>
+          )}
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={colleague.usually_in}
+                onChange={(e) => handleToggleUsuallyIn(colleague.id, e.target.checked)}
+              />
+              Usually in
+            </label>
+            {colleague.colleague_type === 'visitor' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handlePromoteToColleague(colleague.id)}
+                className="h-8 text-xs gap-1"
+                aria-label="Promote to colleague"
+              >
+                <ArrowUpCircle className="h-3.5 w-3.5" />
+                Promote
+              </Button>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => handleDeleteColleague(colleague.id)}
+              className="h-8 w-8 text-destructive"
+              aria-label="Delete colleague"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {colleague.coffee_options.length > 0 ? (
+          <div className="space-y-1">
+            {colleague.coffee_options.map((opt) => (
+              <div
+                key={opt.id}
+                className="flex items-center justify-between text-sm py-1 border-b last:border-0"
+              >
+                <span>
+                  {opt.size_abbreviation} {opt.milk_option_name ? `${opt.milk_option_name} ` : ''}
+                  {opt.drink_type_name}
+                  {opt.sugar > 0 ? `, ${opt.sugar}s` : ''}
+                  {opt.notes ? ` (${opt.notes})` : ''}
+                </span>
+                <div className="flex items-center gap-1">
+                  {opt.is_default ? (
+                    <Star className="h-3.5 w-3.5 text-primary fill-primary" />
+                  ) : (
+                    <button
+                      onClick={() => handleSetDefault(opt.id)}
+                      className="text-muted-foreground hover:text-primary"
+                      aria-label="Set as default"
+                    >
+                      <Star className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteOption(opt.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Delete option"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">No coffee options configured</p>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-2"
+          onClick={() => setCoffeeDialogFor(colleague.id)}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add coffee option
+        </Button>
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -120,14 +253,34 @@ export function AdminColleagues() {
               onChange={(e) => setNewName(e.target.value)}
               autoFocus
             />
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={newUsuallyIn}
-                onChange={(e) => setNewUsuallyIn(e.target.checked)}
-                id="usually_in"
-              />
-              <Label htmlFor="usually_in">Usually in the office</Label>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="colleague_type">Type</Label>
+                <Select
+                  id="colleague_type"
+                  value={newType}
+                  onChange={(e) => {
+                    const val = e.target.value as 'colleague' | 'visitor'
+                    setNewType(val)
+                    if (val === 'visitor') setNewUsuallyIn(false)
+                  }}
+                  className="w-32 h-8"
+                >
+                  <option value="colleague">Colleague</option>
+                  <option value="visitor">Visitor</option>
+                </Select>
+              </div>
+              {newType === 'colleague' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newUsuallyIn}
+                    onChange={(e) => setNewUsuallyIn(e.target.checked)}
+                    id="usually_in"
+                  />
+                  <Label htmlFor="usually_in">Usually in the office</Label>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button size="sm" onClick={handleCreateColleague}>Save</Button>
@@ -137,105 +290,24 @@ export function AdminColleagues() {
         </Card>
       )}
 
-      {colleagues.map((colleague) => (
-        <Card key={colleague.id}>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              {editingId === colleague.id ? (
-                <div className="flex gap-2 flex-1 mr-2">
-                  <Input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="h-8"
-                    autoFocus
-                  />
-                  <Button size="sm" onClick={() => handleUpdateColleague(colleague.id)}>Save</Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
-                </div>
-              ) : (
-                <CardTitle className="flex items-center gap-2">
-                  {colleague.name}
-                  <button
-                    onClick={() => { setEditingId(colleague.id); setEditName(colleague.name) }}
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label="Edit name"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                </CardTitle>
-              )}
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={colleague.usually_in}
-                    onChange={(e) => handleToggleUsuallyIn(colleague.id, e.target.checked)}
-                  />
-                  Usually in
-                </label>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => handleDeleteColleague(colleague.id)}
-                  className="h-8 w-8 text-destructive"
-                  aria-label="Delete colleague"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {colleague.coffee_options.length > 0 ? (
-              <div className="space-y-1">
-                {colleague.coffee_options.map((opt) => (
-                  <div
-                    key={opt.id}
-                    className="flex items-center justify-between text-sm py-1 border-b last:border-0"
-                  >
-                    <span>
-                      {opt.size_abbreviation} {opt.milk_option_name ? `${opt.milk_option_name} ` : ''}
-                      {opt.drink_type_name}
-                      {opt.sugar > 0 ? `, ${opt.sugar}s` : ''}
-                      {opt.notes ? ` (${opt.notes})` : ''}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {opt.is_default ? (
-                        <Star className="h-3.5 w-3.5 text-primary fill-primary" />
-                      ) : (
-                        <button
-                          onClick={() => handleSetDefault(opt.id)}
-                          className="text-muted-foreground hover:text-primary"
-                          aria-label="Set as default"
-                        >
-                          <Star className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDeleteOption(opt.id)}
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label="Delete option"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">No coffee options configured</p>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              className="mt-2"
-              onClick={() => setCoffeeDialogFor(colleague.id)}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" /> Add coffee option
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+      {/* Regular colleagues */}
+      {regularColleagues.length > 0 && (
+        <div className="space-y-4">
+          {regularColleagues.map(renderColleagueCard)}
+        </div>
+      )}
+
+      {/* Visitors */}
+      {visitorColleagues.length > 0 && (
+        <>
+          <p className="text-sm font-medium text-muted-foreground pt-2">
+            Visitors ({visitorColleagues.length})
+          </p>
+          <div className="space-y-4">
+            {visitorColleagues.map(renderColleagueCard)}
+          </div>
+        </>
+      )}
 
       {/* Add Coffee Option Dialog */}
       <Dialog open={!!coffeeDialogFor} onClose={() => setCoffeeDialogFor(null)}>

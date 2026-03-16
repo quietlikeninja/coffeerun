@@ -129,6 +129,8 @@ export interface CoffeeOption {
 export interface Colleague {
   id: string
   name: string
+  colleague_type: 'colleague' | 'visitor'
+  user_id: string | null
   usually_in: boolean
   display_order: number
   is_active: boolean

@@ -2,6 +2,7 @@ import { type Colleague, type CoffeeOption } from '@/api/client'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select } from '@/components/ui/select'
+import { Pencil } from 'lucide-react'
 
 interface ColleagueCardProps {
   colleague: Colleague
@@ -9,6 +10,7 @@ interface ColleagueCardProps {
   selectedOptionId: string
   onToggle: (checked: boolean) => void
   onOptionChange: (optionId: string) => void
+  onEdit?: () => void
 }
 
 function formatOption(opt: CoffeeOption): string {
@@ -26,6 +28,7 @@ export function ColleagueCard({
   selectedOptionId,
   onToggle,
   onOptionChange,
+  onEdit,
 }: ColleagueCardProps) {
   const options = colleague.coffee_options
 
@@ -36,7 +39,23 @@ export function ColleagueCard({
       <div className="flex items-center gap-3">
         <Checkbox checked={checked} onCheckedChange={onToggle} aria-label={`Include ${colleague.name}`} />
         <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">{colleague.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium truncate">{colleague.name}</p>
+            {colleague.colleague_type === 'visitor' && (
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                Visitor
+              </span>
+            )}
+            {onEdit && (
+              <button
+                onClick={onEdit}
+                className="text-muted-foreground hover:text-primary shrink-0"
+                aria-label={`Edit drinks for ${colleague.name}`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           {checked && options.length > 0 && (
             <div className="mt-1">
               {options.length === 1 ? (
