@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setUser(null)
       setActiveTeamId(null)
+      localStorage.removeItem(ACTIVE_TEAM_KEY)
     } finally {
       setLoading(false)
     }
@@ -99,7 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await api.post('/auth/logout')
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Server logout failed — still clear local state
+    }
     setUser(null)
     setActiveTeamId(null)
     localStorage.removeItem(ACTIVE_TEAM_KEY)

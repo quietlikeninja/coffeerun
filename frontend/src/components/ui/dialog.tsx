@@ -11,21 +11,31 @@ interface DialogProps {
 
 function Dialog({ open, onClose, children, className }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const closingRef = useRef(false)
 
   useEffect(() => {
     const el = dialogRef.current
     if (!el) return
     if (open) {
-      el.showModal()
-    } else {
+      if (!el.open) el.showModal()
+    } else if (el.open) {
+      closingRef.current = true
       el.close()
     }
   }, [open])
 
+  const handleClose = () => {
+    if (closingRef.current) {
+      closingRef.current = false
+      return
+    }
+    onClose()
+  }
+
   return (
     <dialog
       ref={dialogRef}
-      onClose={onClose}
+      onClose={handleClose}
       className={cn(
         'backdrop:bg-black/50 rounded-lg border bg-background p-0 shadow-lg max-w-lg w-full mx-auto',
         className
