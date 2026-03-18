@@ -47,12 +47,14 @@ class ColleagueCreate(BaseModel):
     name: str
     usually_in: bool = True
     display_order: int = 0
+    colleague_type: str = "colleague"
 
 
 class ColleagueUpdate(BaseModel):
     name: str | None = None
     usually_in: bool | None = None
     display_order: int | None = None
+    colleague_type: str | None = None
 
 
 class ColleagueResponse(BaseModel):
@@ -61,6 +63,8 @@ class ColleagueResponse(BaseModel):
     usually_in: bool
     display_order: int
     is_active: bool
+    colleague_type: str = "colleague"
+    user_id: uuid.UUID | None = None
     coffee_options: list[CoffeeOptionResponse] = []
     created_at: datetime
     updated_at: datetime

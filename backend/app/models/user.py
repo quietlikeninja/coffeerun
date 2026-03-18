@@ -1,8 +1,8 @@
-import enum
 import uuid
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -10,23 +10,19 @@ class Base(DeclarativeBase):
     pass
 
 
-class UserRole(str, enum.Enum):
-    admin = "admin"
-    viewer = "viewer"
-
-
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.viewer)
+    display_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     magic_link_tokens: Mapped[list["MagicLinkToken"]] = relationship(back_populates="user")
+    team_memberships: Mapped[list["TeamMembership"]] = relationship(lazy="selectin")
 
 
 class MagicLinkToken(Base):

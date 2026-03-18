@@ -5,8 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.middleware.auth import CurrentUser, get_current_user, require_admin
+from app.middleware.auth import TeamMember, get_team_member, require_role
 from app.models.menu import DrinkType, MilkOption, Size
+from app.models.team import TeamRole
 from app.schemas.menu import (
     DrinkTypeCreate,
     DrinkTypeResponse,
@@ -26,11 +27,14 @@ router = APIRouter(prefix="/menu", tags=["menu"])
 @router.get("/drink-types", response_model=list[DrinkTypeResponse])
 async def list_drink_types(
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(get_team_member),
 ):
     result = await db.execute(
         select(DrinkType)
-        .where(DrinkType.is_active == True)  # noqa: E712
+        .where(
+            DrinkType.team_id == team_member.team_id,
+            DrinkType.is_active == True,  # noqa: E712
+        )
         .order_by(DrinkType.display_order, DrinkType.name)
     )
     return result.scalars().all()
@@ -40,9 +44,9 @@ async def list_drink_types(
 async def create_drink_type(
     data: DrinkTypeCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    item = DrinkType(**data.model_dump())
+    item = DrinkType(team_id=team_member.team_id, **data.model_dump())
     db.add(item)
     await db.flush()
     await db.refresh(item)
@@ -54,9 +58,14 @@ async def update_drink_type(
     item_id: uuid.UUID,
     data: DrinkTypeUpdate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(DrinkType).where(DrinkType.id == item_id))
+    result = await db.execute(
+        select(DrinkType).where(
+            DrinkType.id == item_id,
+            DrinkType.team_id == team_member.team_id,
+        )
+    )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Drink type not found")
@@ -71,9 +80,14 @@ async def update_drink_type(
 async def delete_drink_type(
     item_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(DrinkType).where(DrinkType.id == item_id))
+    result = await db.execute(
+        select(DrinkType).where(
+            DrinkType.id == item_id,
+            DrinkType.team_id == team_member.team_id,
+        )
+    )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Drink type not found")
@@ -86,11 +100,14 @@ async def delete_drink_type(
 @router.get("/sizes", response_model=list[SizeResponse])
 async def list_sizes(
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(get_team_member),
 ):
     result = await db.execute(
         select(Size)
-        .where(Size.is_active == True)  # noqa: E712
+        .where(
+            Size.team_id == team_member.team_id,
+            Size.is_active == True,  # noqa: E712
+        )
         .order_by(Size.display_order, Size.name)
     )
     return result.scalars().all()
@@ -100,9 +117,9 @@ async def list_sizes(
 async def create_size(
     data: SizeCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    item = Size(**data.model_dump())
+    item = Size(team_id=team_member.team_id, **data.model_dump())
     db.add(item)
     await db.flush()
     await db.refresh(item)
@@ -114,9 +131,14 @@ async def update_size(
     item_id: uuid.UUID,
     data: SizeUpdate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(Size).where(Size.id == item_id))
+    result = await db.execute(
+        select(Size).where(
+            Size.id == item_id,
+            Size.team_id == team_member.team_id,
+        )
+    )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Size not found")
@@ -131,9 +153,14 @@ async def update_size(
 async def delete_size(
     item_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(Size).where(Size.id == item_id))
+    result = await db.execute(
+        select(Size).where(
+            Size.id == item_id,
+            Size.team_id == team_member.team_id,
+        )
+    )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Size not found")
@@ -146,11 +173,14 @@ async def delete_size(
 @router.get("/milk-options", response_model=list[MilkOptionResponse])
 async def list_milk_options(
     db: AsyncSession = Depends(get_db),
-    _user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(get_team_member),
 ):
     result = await db.execute(
         select(MilkOption)
-        .where(MilkOption.is_active == True)  # noqa: E712
+        .where(
+            MilkOption.team_id == team_member.team_id,
+            MilkOption.is_active == True,  # noqa: E712
+        )
         .order_by(MilkOption.display_order, MilkOption.name)
     )
     return result.scalars().all()
@@ -160,9 +190,9 @@ async def list_milk_options(
 async def create_milk_option(
     data: MilkOptionCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    item = MilkOption(**data.model_dump())
+    item = MilkOption(team_id=team_member.team_id, **data.model_dump())
     db.add(item)
     await db.flush()
     await db.refresh(item)
@@ -174,9 +204,14 @@ async def update_milk_option(
     item_id: uuid.UUID,
     data: MilkOptionUpdate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(MilkOption).where(MilkOption.id == item_id))
+    result = await db.execute(
+        select(MilkOption).where(
+            MilkOption.id == item_id,
+            MilkOption.team_id == team_member.team_id,
+        )
+    )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Milk option not found")
@@ -191,9 +226,14 @@ async def update_milk_option(
 async def delete_milk_option(
     item_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(MilkOption).where(MilkOption.id == item_id))
+    result = await db.execute(
+        select(MilkOption).where(
+            MilkOption.id == item_id,
+            MilkOption.team_id == team_member.team_id,
+        )
+    )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Milk option not found")

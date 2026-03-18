@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api, type DrinkType, type Size, type MilkOption } from '@/api/client'
+import { type DrinkType, type Size, type MilkOption } from '@/api/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { Plus, Trash2 } from 'lucide-react'
 type MenuSection = 'drink-types' | 'sizes' | 'milk-options'
 
 export function AdminMenu() {
+  const { teamApi, activeTeamId } = useAuth()
   const [drinkTypes, setDrinkTypes] = useState<DrinkType[]>([])
   const [sizes, setSizes] = useState<Size[]>([])
   const [milkOptions, setMilkOptions] = useState<MilkOption[]>([])
@@ -20,9 +22,9 @@ export function AdminMenu() {
 
   const fetchAll = async () => {
     const [dt, s, m] = await Promise.all([
-      api.get<DrinkType[]>('/menu/drink-types'),
-      api.get<Size[]>('/menu/sizes'),
-      api.get<MilkOption[]>('/menu/milk-options'),
+      teamApi.get<DrinkType[]>('/menu/drink-types'),
+      teamApi.get<Size[]>('/menu/sizes'),
+      teamApi.get<MilkOption[]>('/menu/milk-options'),
     ])
     setDrinkTypes(dt)
     setSizes(s)
@@ -30,14 +32,15 @@ export function AdminMenu() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchAll() }, [])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching sets state after async resolution
+  useEffect(() => { fetchAll() }, [activeTeamId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = async (section: MenuSection) => {
     if (!newName.trim()) return
     if (section === 'sizes') {
-      await api.post(`/menu/${section}`, { name: newName.trim(), abbreviation: newAbbr.trim() || newName.trim().substring(0, 3) })
+      await teamApi.post(`/menu/${section}`, { name: newName.trim(), abbreviation: newAbbr.trim() || newName.trim().substring(0, 3) })
     } else {
-      await api.post(`/menu/${section}`, { name: newName.trim() })
+      await teamApi.post(`/menu/${section}`, { name: newName.trim() })
     }
     setAdding(null)
     setNewName('')
@@ -46,7 +49,7 @@ export function AdminMenu() {
   }
 
   const handleDelete = async (section: MenuSection, id: string) => {
-    await api.delete(`/menu/${section}/${id}`)
+    await teamApi.delete(`/menu/${section}/${id}`)
     fetchAll()
   }
 

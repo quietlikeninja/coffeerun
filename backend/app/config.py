@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     email_from: str = "CoffeeRun <noreply@example.com>"
     sentry_dsn: str = ""
+    invite_expiry_days: int = 7
     environment: str = "development"
 
     model_config = {"env_file": ".env", "extra": "ignore"}

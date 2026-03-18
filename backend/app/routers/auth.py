@@ -1,9 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.middleware.auth import CurrentUser, get_current_user
-from app.schemas.auth import LoginRequest, MessageResponse, UserResponse, VerifyRequest
+from app.models.team import Team, TeamMembership
+from app.models.user import User
+from app.schemas.auth import (
+    LoginRequest,
+    MessageResponse,
+    UserResponse,
+    UserTeamMembership,
+    VerifyRequest,
+)
 from app.services.auth import (
     create_jwt,
     create_magic_link_token,
@@ -24,14 +34,12 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/verify", response_model=UserResponse)
-async def verify(
-    request: VerifyRequest, response: Response, db: AsyncSession = Depends(get_db)
-):
+async def verify(request: VerifyRequest, response: Response, db: AsyncSession = Depends(get_db)):
     user = await verify_magic_token(db, request.token)
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    token = create_jwt(user.id, user.email, user.role.value)
+    token = create_jwt(user.id, user.email)
     response.set_cookie(
         key="access_token",
         value=token,
@@ -40,8 +48,16 @@ async def verify(
         secure=True,
         max_age=7 * 24 * 60 * 60,
     )
+
+    # Build teams list
+    teams = await _get_user_teams(db, user.id)
+
     return UserResponse(
-        id=user.id, email=user.email, role=user.role.value, created_at=user.created_at
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        teams=teams,
+        created_at=user.created_at,
     )
 
 
@@ -52,10 +68,42 @@ async def logout(response: Response):
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(current_user: CurrentUser = Depends(get_current_user)):
+async def me(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Fetch full user for display_name and created_at
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    teams = await _get_user_teams(db, current_user.id)
+
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
-        role=current_user.role.value,
-        created_at=None,
+        display_name=user.display_name if user else None,
+        teams=teams,
+        created_at=user.created_at if user else None,
     )
+
+
+async def _get_user_teams(db: AsyncSession, user_id) -> list[UserTeamMembership]:
+    """Query team memberships for a user, returning only active teams."""
+    result = await db.execute(
+        select(TeamMembership)
+        .join(Team, TeamMembership.team_id == Team.id)
+        .where(
+            TeamMembership.user_id == user_id,
+            Team.is_active == True,  # noqa: E712
+        )
+        .options(selectinload(TeamMembership.team))
+    )
+    memberships = result.scalars().all()
+    return [
+        UserTeamMembership(
+            team_id=m.team_id,
+            team_name=m.team.name,
+            role=m.role.value,
+        )
+        for m in memberships
+    ]

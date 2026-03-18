@@ -1,17 +1,17 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.middleware.auth import CurrentUser, get_current_user, require_admin
+from app.middleware.auth import TeamMember, get_team_member, require_role
 from app.models.colleague import Colleague
 from app.models.coffee_option import CoffeeOption
+from app.models.team import TeamRole
 from app.schemas.colleague import (
     CoffeeOptionCreate,
     CoffeeOptionResponse,
-    CoffeeOptionUpdate,
     ColleagueCreate,
     ColleagueResponse,
     ColleagueUpdate,
@@ -46,6 +46,8 @@ def _colleague_to_response(colleague: Colleague) -> ColleagueResponse:
         usually_in=colleague.usually_in,
         display_order=colleague.display_order,
         is_active=colleague.is_active,
+        colleague_type=colleague.colleague_type.value,
+        user_id=colleague.user_id,
         coffee_options=[_coffee_option_to_response(o) for o in colleague.coffee_options],
         created_at=colleague.created_at,
         updated_at=colleague.updated_at,
@@ -54,14 +56,18 @@ def _colleague_to_response(colleague: Colleague) -> ColleagueResponse:
 
 @router.get("", response_model=list[ColleagueResponse])
 async def list_colleagues(
+    colleague_type: str | None = Query(None, description="Filter by colleague or visitor"),
     db: AsyncSession = Depends(get_db),
-    _current_user: CurrentUser = Depends(get_current_user),
+    team_member: TeamMember = Depends(get_team_member),
 ):
-    result = await db.execute(
-        select(Colleague)
-        .where(Colleague.is_active == True)  # noqa: E712
-        .order_by(Colleague.display_order, Colleague.name)
+    query = select(Colleague).where(
+        Colleague.team_id == team_member.team_id,
+        Colleague.is_active == True,  # noqa: E712
     )
+    if colleague_type is not None:
+        query = query.where(Colleague.colleague_type == colleague_type)
+    query = query.order_by(Colleague.display_order, Colleague.name)
+    result = await db.execute(query)
     colleagues = result.scalars().all()
     return [_colleague_to_response(c) for c in colleagues]
 
@@ -70,9 +76,12 @@ async def list_colleagues(
 async def create_colleague(
     data: ColleagueCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    colleague = Colleague(**data.model_dump())
+    colleague = Colleague(
+        team_id=team_member.team_id,
+        **data.model_dump(),
+    )
     db.add(colleague)
     await db.flush()
     await db.refresh(colleague)
@@ -84,9 +93,14 @@ async def update_colleague(
     colleague_id: uuid.UUID,
     data: ColleagueUpdate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(Colleague).where(Colleague.id == colleague_id))
+    result = await db.execute(
+        select(Colleague).where(
+            Colleague.id == colleague_id,
+            Colleague.team_id == team_member.team_id,
+        )
+    )
     colleague = result.scalar_one_or_none()
     if not colleague:
         raise HTTPException(status_code=404, detail="Colleague not found")
@@ -103,9 +117,14 @@ async def update_colleague(
 async def delete_colleague(
     colleague_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(require_role(TeamRole.owner, TeamRole.manager)),
 ):
-    result = await db.execute(select(Colleague).where(Colleague.id == colleague_id))
+    result = await db.execute(
+        select(Colleague).where(
+            Colleague.id == colleague_id,
+            Colleague.team_id == team_member.team_id,
+        )
+    )
     colleague = result.scalar_one_or_none()
     if not colleague:
         raise HTTPException(status_code=404, detail="Colleague not found")
@@ -125,23 +144,34 @@ async def add_coffee_option(
     colleague_id: uuid.UUID,
     data: CoffeeOptionCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    team_member: TeamMember = Depends(get_team_member),
 ):
-    result = await db.execute(select(Colleague).where(Colleague.id == colleague_id))
-    if not result.scalar_one_or_none():
+    result = await db.execute(
+        select(Colleague).where(
+            Colleague.id == colleague_id,
+            Colleague.team_id == team_member.team_id,
+        )
+    )
+    colleague = result.scalar_one_or_none()
+    if not colleague:
         raise HTTPException(status_code=404, detail="Colleague not found")
+
+    # Permission: owner/manager can add to any; member only to own linked colleague
+    if team_member.role not in (TeamRole.owner, TeamRole.manager):
+        if colleague.user_id != team_member.id:
+            raise HTTPException(status_code=403, detail="Cannot add options to this colleague")
 
     # If this is the first option or marked as default, handle default logic
     if data.is_default:
-        await db.execute(
-            select(CoffeeOption)
-            .where(CoffeeOption.colleague_id == colleague_id)
-        )
         existing = (
-            await db.execute(
-                select(CoffeeOption).where(CoffeeOption.colleague_id == colleague_id)
+            (
+                await db.execute(
+                    select(CoffeeOption).where(CoffeeOption.colleague_id == colleague_id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for opt in existing:
             opt.is_default = False
 
@@ -149,10 +179,10 @@ async def add_coffee_option(
 
     # If first option, make it default
     existing_count = (
-        await db.execute(
-            select(CoffeeOption).where(CoffeeOption.colleague_id == colleague_id)
-        )
-    ).scalars().all()
+        (await db.execute(select(CoffeeOption).where(CoffeeOption.colleague_id == colleague_id)))
+        .scalars()
+        .all()
+    )
     if len(existing_count) == 0:
         option.is_default = True
 
