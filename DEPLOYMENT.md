@@ -76,7 +76,7 @@ In development mode (no `RESEND_API_KEY` set), magic link URLs are printed to th
 3. Check the backend terminal output for the magic link URL
 4. Click or paste the link to complete login
 
-The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is automatically assigned the admin role on first login. All other emails get the viewer role.
+The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is seeded as a user on first run. Roles are per-team — create a team after first login to get started.
 
 ### 4. Local dev defaults
 
@@ -85,7 +85,7 @@ The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is automatically
 | Database             | SQLite (`./coffeerun.db`)         |
 | Backend URL          | `http://localhost:8000`           |
 | Frontend URL         | `http://localhost:5173`           |
-| Admin email          | `admin@example.com`               |
+| Seed email (`ADMIN_EMAIL`) | `admin@example.com` (seeded as a user, no special role) |
 | JWT secret           | `dev-secret-change-in-production` |
 | Magic link expiry    | 15 minutes                        |
 | JWT expiry           | 7 days                            |
@@ -97,17 +97,19 @@ The email matching `ADMIN_EMAIL` (default: `admin@example.com`) is automatically
 
 ### Backend (Docker / Server)
 
-| Variable                    | Required | Default                           | Description                                          |
-|-----------------------------|----------|-----------------------------------|------------------------------------------------------|
-| `DATABASE_URL`              | Yes      | `sqlite:///./coffeerun.db`        | PostgreSQL connection string for production          |
-| `ADMIN_EMAIL`               | Yes      | `admin@example.com`               | Email of the initial admin user                      |
-| `JWT_SECRET`                | Yes      | `dev-secret-change-in-production` | Secret key for signing JWTs. **Must change in prod** |
-| `FRONTEND_URL`              | Yes      | `http://localhost:5173`           | Frontend URL for CORS and magic link URLs            |
-| `RESEND_API_KEY`            | No*      | _(empty)_                         | Resend API key for sending emails. *Required in prod |
-| `SENTRY_DSN`                | No       | _(empty)_                         | Sentry DSN for backend error tracking                |
-| `ENVIRONMENT`               | No       | `development`                     | `development` or `production`                        |
-| `JWT_EXPIRY_DAYS`           | No       | `7`                               | JWT token lifetime in days                           |
-| `MAGIC_LINK_EXPIRY_MINUTES` | No       | `15`                              | Magic link token lifetime in minutes                 |
+| Variable                    | Required | Default                                  | Description                                          |
+|-----------------------------|----------|------------------------------------------|------------------------------------------------------|
+| `DATABASE_URL`              | Yes      | `sqlite:///./coffeerun.db`               | PostgreSQL connection string for production          |
+| `JWT_SECRET`                | Yes      | `dev-secret-change-in-production`        | Secret key for signing JWTs. **Must change in prod** |
+| `FRONTEND_URL`              | Yes      | `http://localhost:5173`                  | Frontend URL for CORS and magic link/invite URLs     |
+| `RESEND_API_KEY`            | No*      | _(empty)_                                | Resend API key for sending emails. *Required in prod |
+| `EMAIL_FROM`                | No*      | `CoffeeRun <noreply@example.com>`        | From address for outgoing emails. *Required in prod  |
+| `ADMIN_EMAIL`               | No       | `admin@example.com`                      | Email seeded as a user on first deploy (no special role) |
+| `SENTRY_DSN`                | No       | _(empty)_                                | Sentry DSN for backend error tracking                |
+| `ENVIRONMENT`               | No       | `development`                            | `development` or `production`                        |
+| `JWT_EXPIRY_DAYS`           | No       | `7`                                      | JWT token lifetime in days                           |
+| `MAGIC_LINK_EXPIRY_MINUTES` | No       | `15`                                     | Magic link token lifetime in minutes                 |
+| `INVITE_EXPIRY_DAYS`        | No       | `7`                                      | Team invite token lifetime in days                   |
 
 ### Frontend (Vercel / Static Hosting)
 
@@ -295,7 +297,7 @@ The `frontend/vercel.json` rewrite rule ensures SPA routing works for all client
 - [ ] `FRONTEND_URL` matches the actual Vercel deployment URL (for CORS)
 - [ ] `VITE_API_URL` matches the Caddy/tunnel URL for the backend
 - [ ] Magic link emails are delivered via Resend
-- [ ] Admin user can log in with `ADMIN_EMAIL` and sees admin nav items
+- [ ] User can log in and create a team (or accept an invite) to access the full UI
 
 ---
 

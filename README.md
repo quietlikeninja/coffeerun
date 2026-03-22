@@ -34,7 +34,7 @@ coffeerun/
 │   │   ├── database.py       # Async SQLAlchemy engine and session
 │   │   ├── models/           # ORM models (user, colleague, menu, order)
 │   │   ├── schemas/          # Pydantic request/response schemas
-│   │   ├── routers/          # API route handlers
+│   │   ├── routers/          # API route handlers (auth, teams, colleagues, menu, orders, stats)
 │   │   ├── services/         # Business logic (auth, email, order consolidation)
 │   │   └── middleware/       # JWT validation
 │   ├── alembic/              # Database migrations
@@ -47,7 +47,7 @@ coffeerun/
     │   ├── api/client.ts      # Fetch wrapper and TypeScript interfaces
     │   ├── context/           # Auth context
     │   ├── hooks/             # useAuth, useOrder
-    │   ├── pages/             # Login, Dashboard, OrderView, Admin pages, Stats
+    │   ├── pages/             # Login, Dashboard, OrderView, Admin pages, Stats, TeamSettings, CreateTeam, InviteAccept
     │   └── components/        # ColleagueCard, OrderSummary, UI primitives
     ├── package.json
     ├── vite.config.ts
@@ -113,12 +113,14 @@ With `RESEND_API_KEY` unset, magic link emails are printed to the backend consol
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | No | `sqlite:///./coffeerun.db` | PostgreSQL URL in production, SQLite in dev |
-| `ADMIN_EMAIL` | Yes | `admin@example.com` | Email address seeded as the first admin |
 | `JWT_SECRET` | Yes | `dev-secret-change-in-production` | Secret key for signing JWTs — **change in production** |
-| `FRONTEND_URL` | Yes | `http://localhost:5173` | Used for CORS and magic link URLs |
+| `FRONTEND_URL` | Yes | `http://localhost:5173` | Used for CORS and magic link/invite URLs |
+| `ADMIN_EMAIL` | No | `admin@example.com` | Email seeded as a user on first deploy (no special role) |
 | `RESEND_API_KEY` | No | *(empty)* | Email delivery API key — omit to print links to console |
+| `EMAIL_FROM` | No | `CoffeeRun <noreply@example.com>` | From address for outgoing emails |
 | `JWT_EXPIRY_DAYS` | No | `7` | JWT token lifetime in days |
 | `MAGIC_LINK_EXPIRY_MINUTES` | No | `15` | Magic link expiry in minutes |
+| `INVITE_EXPIRY_DAYS` | No | `7` | Team invite token lifetime in days |
 | `SENTRY_DSN` | No | *(empty)* | Backend error tracking DSN |
 | `ENVIRONMENT` | No | `development` | Environment label for logging and Sentry |
 
@@ -132,35 +134,46 @@ With `RESEND_API_KEY` unset, magic link emails are printed to the backend consol
 
 ## API Overview
 
-All routes are prefixed `/api/v1`. Role requirements: **A** = Admin, **V** = Viewer (any logged-in user), **P** = Public.
+All routes are prefixed `/api/v1`. Role requirements: **O** = Owner, **M** = Manager, **V** = Member (any logged-in team member), **P** = Public. Team-scoped routes are prefixed `/teams/{team_id}/`.
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
 | `POST` | `/auth/login` | P | Request magic link email |
 | `POST` | `/auth/verify` | P | Verify token, receive JWT cookie |
 | `POST` | `/auth/logout` | V | Clear auth cookie |
-| `GET` | `/auth/me` | V | Current user info |
-| `GET` | `/colleagues` | V | List colleagues with coffee options |
-| `POST` | `/colleagues` | A | Add colleague |
-| `PUT` | `/colleagues/{id}` | A | Update colleague |
-| `DELETE` | `/colleagues/{id}` | A | Soft-delete colleague |
-| `POST` | `/colleagues/{id}/coffee-options` | A | Add coffee option |
-| `PUT` | `/coffee-options/{id}` | A | Update coffee option |
-| `DELETE` | `/coffee-options/{id}` | A | Delete coffee option |
-| `PUT` | `/coffee-options/{id}/set-default` | A | Set as colleague default |
-| `GET` | `/menu/drink-types` | V | List drink types |
-| `POST/PUT/DELETE` | `/menu/drink-types` | A | Manage drink types |
-| `GET/POST/PUT/DELETE` | `/menu/sizes` | A/V | Manage cup sizes |
-| `GET/POST/PUT/DELETE` | `/menu/milk-options` | A/V | Manage milk options |
-| `POST` | `/orders` | V | Create order |
-| `GET` | `/orders` | V | List orders (paginated) |
-| `GET` | `/orders/{id}` | V | Order details |
-| `PUT` | `/orders/{id}` | V | Update order items |
+| `GET` | `/auth/me` | V | Current user info + team memberships |
+| `GET` | `/teams` | V | List teams the current user belongs to |
+| `POST` | `/teams` | V | Create a new team |
+| `GET/PUT/DELETE` | `/teams/{team_id}` | O | Get, update, or delete team |
+| `GET` | `/teams/{team_id}/members` | V | List team members |
+| `PUT/DELETE` | `/teams/{team_id}/members/{user_id}` | O/M | Update role or remove member |
+| `POST` | `/teams/{team_id}/invites` | O/M | Send invite email |
+| `GET` | `/teams/{team_id}/invites` | O/M | List pending invites |
+| `DELETE` | `/teams/{team_id}/invites/{id}` | O/M | Revoke invite |
+| `POST` | `/invites/accept` | V | Accept invite by token |
+| `GET` | `/teams/{team_id}/colleagues` | V | List colleagues with coffee options |
+| `POST` | `/teams/{team_id}/colleagues` | O/M | Add colleague or visitor |
+| `PUT` | `/teams/{team_id}/colleagues/{id}` | O/M | Update colleague |
+| `DELETE` | `/teams/{team_id}/colleagues/{id}` | O/M | Soft-delete colleague |
+| `POST` | `/teams/{team_id}/colleagues/{id}/coffee-options` | O/M/V* | Add coffee option |
+| `PUT` | `/teams/{team_id}/coffee-options/{id}` | O/M/V* | Update coffee option |
+| `DELETE` | `/teams/{team_id}/coffee-options/{id}` | O/M/V* | Delete coffee option |
+| `PUT` | `/teams/{team_id}/coffee-options/{id}/set-default` | O/M/V* | Set as colleague default |
+| `GET` | `/teams/{team_id}/menu/drink-types` | V | List drink types |
+| `POST/PUT/DELETE` | `/teams/{team_id}/menu/drink-types` | O/M | Manage drink types |
+| `GET/POST/PUT/DELETE` | `/teams/{team_id}/menu/sizes` | O/M/V | Manage cup sizes |
+| `GET/POST/PUT/DELETE` | `/teams/{team_id}/menu/milk-options` | O/M/V | Manage milk options |
+| `POST` | `/teams/{team_id}/orders` | V | Create order |
+| `GET` | `/teams/{team_id}/orders` | V | List orders (paginated) |
+| `GET` | `/teams/{team_id}/orders/{id}` | V | Order details |
+| `PUT` | `/teams/{team_id}/orders/{id}` | V | Update order items |
 | `GET` | `/orders/share/{token}` | P | Public shareable order |
-| `GET` | `/stats/overview` | V | Order counts and busiest day |
-| `GET` | `/stats/drinks` | V | Top drinks |
-| `GET` | `/stats/colleagues` | V | Per-colleague frequency |
+| `GET` | `/teams/{team_id}/stats/overview` | O/M | Order counts and busiest day |
+| `GET` | `/teams/{team_id}/stats/drinks` | O/M | Top drinks |
+| `GET` | `/teams/{team_id}/stats/colleagues` | O/M | Per-colleague frequency |
 | `GET` | `/api/health` | P | Health check |
+
+*V* = Members can only modify their own linked colleague's coffee options.
 
 ## Deployment
 
@@ -185,11 +198,14 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full step-by-step deployment guide.
 
 Schema uses PostgreSQL in production. Migrations are managed with Alembic.
 
-**Tables**: `users`, `magic_link_tokens`, `colleagues`, `drink_types`, `sizes`, `milk_options`, `coffee_options`, `orders`, `order_items`
+**Tables**: `users`, `magic_link_tokens`, `teams`, `team_memberships`, `team_invites`, `colleagues`, `drink_types`, `sizes`, `milk_options`, `coffee_options`, `orders`, `order_items`
 
 **Design notes:**
 - Order items snapshot drink details at creation time so historical orders are unaffected by later menu changes
-- Colleagues and menu items use soft deletes (`is_active = false`)
+- Roles are per-team via `team_memberships` — users have no global role
+- All domain data is team-scoped (every table except `users` has a `team_id`)
+- Colleagues support two types: `colleague` and `visitor`. Visitors can be linked to a user account.
+- Teams, colleagues, and menu items use soft deletes (`is_active = false`)
 - All primary keys are UUIDs
 - All timestamps are timezone-aware UTC
 
@@ -206,19 +222,22 @@ PYTHONPATH=. alembic upgrade head
 The application is feature-complete at MVP level and deployed to production.
 
 **Working:**
-- Magic link authentication and role-based access control
+- Magic link authentication with per-team role-based access control (owner / manager / member)
+- Multi-team support — users can create and belong to multiple teams, switch active team
+- Team invites — invite by email with role assignment and optional colleague pre-linking
 - Full ordering workflow (select colleagues → pick coffees → consolidated summary)
-- Shareable order URLs
+- Shareable order URLs (public, no auth required)
 - Order history with pagination
-- Admin CRUD for colleagues, coffee options, and menu items
+- Owner/Manager CRUD for colleagues (including visitor type), coffee options, and menu items
+- Members can edit their own linked colleague's drink preferences
 - Analytics dashboard (order frequency, top drinks, per-colleague stats)
 - Mobile-responsive UI
 - Vercel + Docker/homelab deployment with PostgreSQL
+- Automated test suite
 
 **Not yet implemented:**
-- Automated test suite (no tests currently exist)
 - Graphical charts in the analytics dashboard (currently rendered as lists)
-- Sentry error tracking (configured but not activated in `main.py`)
+- Sentry error tracking (configured but not activated)
 
 ## License
 
