@@ -21,7 +21,7 @@ A web application for managing daily office coffee orders. Each morning, select 
 | Database | PostgreSQL (production), SQLite (development) |
 | Auth | Magic links via Resend, JWT in httpOnly cookies |
 | Hosting | Vercel (frontend), Docker / homelab (backend + database) |
-| Monitoring | Sentry, Vercel Analytics |
+| Monitoring | Sentry (planned — not yet integrated) |
 
 ## Project Structure
 
@@ -34,8 +34,8 @@ coffeerun/
 │   │   ├── database.py       # Async SQLAlchemy engine and session
 │   │   ├── models/           # ORM models (user, colleague, menu, order)
 │   │   ├── schemas/          # Pydantic request/response schemas
-│   │   ├── routers/          # API route handlers (auth, teams, colleagues, menu, orders, stats)
-│   │   ├── services/         # Business logic (auth, email, order consolidation)
+│   │   ├── routers/          # API route handlers (auth, teams, colleagues, coffee options, menu, orders, shared orders, stats)
+│   │   ├── services/         # Business logic (auth, email, order consolidation, teams)
 │   │   └── middleware/       # JWT validation
 │   ├── alembic/              # Database migrations
 │   ├── requirements.txt
@@ -46,7 +46,8 @@ coffeerun/
     │   ├── App.tsx            # Routes and auth layout
     │   ├── api/client.ts      # Fetch wrapper and TypeScript interfaces
     │   ├── context/           # Auth context
-    │   ├── hooks/             # useAuth, useOrder
+    │   ├── hooks/             # useAuth
+    │   ├── lib/               # Shared utilities
     │   ├── pages/             # Login, Dashboard, OrderView, Admin pages, Stats, TeamSettings, CreateTeam, InviteAccept
     │   └── components/        # ColleagueCard, OrderSummary, UI primitives
     ├── package.json
@@ -58,7 +59,7 @@ coffeerun/
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Python 3.12+
 - (Optional) PostgreSQL — SQLite is used by default in development
 
@@ -68,15 +69,15 @@ coffeerun/
 cd backend
 
 # Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env — at minimum set ADMIN_EMAIL
+# Defaults work for local development
 
 # Run database migrations
 PYTHONPATH=. alembic upgrade head
@@ -104,7 +105,7 @@ The app will be available at `http://localhost:5173`.
 
 ### First Login
 
-With `RESEND_API_KEY` unset, magic link emails are printed to the backend console instead of being sent. Navigate to the app, enter the email you set as `ADMIN_EMAIL`, and copy the link from the terminal output.
+With `RESEND_API_KEY` unset, magic link emails are printed to the backend console instead of being sent. Navigate to the app, enter any email address (an account is created automatically on first login), and copy the link from the terminal output. After logging in, create your first team.
 
 ## Configuration
 
@@ -115,7 +116,7 @@ With `RESEND_API_KEY` unset, magic link emails are printed to the backend consol
 | `DATABASE_URL` | No | `sqlite:///./coffeerun.db` | PostgreSQL URL in production, SQLite in dev |
 | `JWT_SECRET` | Yes | `dev-secret-change-in-production` | Secret key for signing JWTs — **change in production** |
 | `FRONTEND_URL` | Yes | `http://localhost:5173` | Used for CORS and magic link/invite URLs |
-| `ADMIN_EMAIL` | No | `admin@example.com` | Email seeded as a user on first deploy (no special role) |
+| `ADMIN_EMAIL` | No | `admin@example.com` | **Unused** — legacy setting from the single-team era; safe to omit |
 | `RESEND_API_KEY` | No | *(empty)* | Email delivery API key — omit to print links to console |
 | `EMAIL_FROM` | No | `CoffeeRun <noreply@example.com>` | From address for outgoing emails |
 | `JWT_EXPIRY_DAYS` | No | `7` | JWT token lifetime in days |
@@ -129,8 +130,6 @@ With `RESEND_API_KEY` unset, magic link emails are printed to the backend consol
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VITE_API_URL` | Yes | Backend API base URL |
-| `VITE_SENTRY_DSN` | No | Frontend error tracking DSN |
-| `VITE_ENVIRONMENT` | No | Environment label for Sentry |
 
 ## API Overview
 
@@ -140,11 +139,12 @@ All routes are prefixed `/api/v1`. Role requirements: **O** = Owner, **M** = Man
 |--------|------|------|-------------|
 | `POST` | `/auth/login` | P | Request magic link email |
 | `POST` | `/auth/verify` | P | Verify token, receive JWT cookie |
-| `POST` | `/auth/logout` | V | Clear auth cookie |
+| `POST` | `/auth/logout` | P | Clear auth cookie |
 | `GET` | `/auth/me` | V | Current user info + team memberships |
 | `GET` | `/teams` | V | List teams the current user belongs to |
 | `POST` | `/teams` | V | Create a new team |
-| `GET/PUT/DELETE` | `/teams/{team_id}` | O | Get, update, or delete team |
+| `GET` | `/teams/{team_id}` | V | Team details |
+| `PUT/DELETE` | `/teams/{team_id}` | O | Update or delete team |
 | `GET` | `/teams/{team_id}/members` | V | List team members |
 | `PUT/DELETE` | `/teams/{team_id}/members/{user_id}` | O/M | Update role or remove member |
 | `POST` | `/teams/{team_id}/invites` | O/M | Send invite email |
@@ -161,8 +161,10 @@ All routes are prefixed `/api/v1`. Role requirements: **O** = Owner, **M** = Man
 | `PUT` | `/teams/{team_id}/coffee-options/{id}/set-default` | O/M/V* | Set as colleague default |
 | `GET` | `/teams/{team_id}/menu/drink-types` | V | List drink types |
 | `POST/PUT/DELETE` | `/teams/{team_id}/menu/drink-types` | O/M | Manage drink types |
-| `GET/POST/PUT/DELETE` | `/teams/{team_id}/menu/sizes` | O/M/V | Manage cup sizes |
-| `GET/POST/PUT/DELETE` | `/teams/{team_id}/menu/milk-options` | O/M/V | Manage milk options |
+| `GET` | `/teams/{team_id}/menu/sizes` | V | List cup sizes |
+| `POST/PUT/DELETE` | `/teams/{team_id}/menu/sizes` | O/M | Manage cup sizes |
+| `GET` | `/teams/{team_id}/menu/milk-options` | V | List milk options |
+| `POST/PUT/DELETE` | `/teams/{team_id}/menu/milk-options` | O/M | Manage milk options |
 | `POST` | `/teams/{team_id}/orders` | V | Create order |
 | `GET` | `/teams/{team_id}/orders` | V | List orders (paginated) |
 | `GET` | `/teams/{team_id}/orders/{id}` | V | Order details |
@@ -191,8 +193,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full step-by-step deployment guide.
 
 - Set `JWT_SECRET` to a securely generated random string
 - Set `FRONTEND_URL` exactly to the Vercel deployment URL (no trailing slash) for CORS to work
-- Migrations run automatically: `PYTHONPATH=. alembic upgrade head`
-- The `ADMIN_EMAIL` user is promoted to admin on their first successful login
+- Migrations run automatically on container start: `PYTHONPATH=. alembic upgrade head`
 
 ## Database
 
@@ -237,7 +238,7 @@ The application is feature-complete at MVP level and deployed to production.
 
 **Not yet implemented:**
 - Graphical charts in the analytics dashboard (currently rendered as lists)
-- Sentry error tracking (configured but not activated)
+- Sentry error tracking (backend `SENTRY_DSN` setting exists but the SDK is never initialized; no frontend integration)
 
 ## License
 

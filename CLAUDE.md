@@ -7,11 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 CoffeeRun is a multi‑team coffee ordering web application.
 Users belong to one or more teams, create and share daily coffee orders, manage colleagues (including visitors), and view team‑scoped order history and stats.
 
-**Tech stack:**
-- **Frontend:** React 19 + TypeScript, deployed on Vercel
-- **Backend:** FastAPI + async SQLAlchemy 2
-- **Database:** PostgreSQL (production), SQLite (development)
-- **Deployment:** Self‑hosted backend via Docker/Dockge; frontend on Vercel
+Deployment: self‑hosted backend via Docker/Dockge; frontend on Vercel.
 The application fully supports multi‑team operation. All legacy single‑team assumptions have been removed.
 
 ## System Invariants (Do Not Break)
@@ -48,23 +44,6 @@ These rules define the core architecture. Any change that violates them is incor
   - current team membership
   - required role (owner / manager / member)
 
-## Commands
-
-### Frontend (`frontend/`)
-```bash
-npm run dev       # Vite dev server on port 5173
-npm run build     # Type check + production build
-npm run lint      # ESLint
-npm run preview   # Preview production build
-```
-
-### Backend (`backend/`)
-```bash
-uvicorn app.main:app --reload --port 8000
-alembic upgrade head
-ruff format . && ruff check .
-```
-
 ## Deployment Notes
 - Backend Docker image is built by GitHub Actions and pushed to GHCR
 - Container startup runs migrations before starting the app
@@ -73,6 +52,7 @@ ruff format . && ruff check .
 
 ## Non‑Goals
 - Do **not** reintroduce global user roles
+- Do **not** wire up the `ADMIN_EMAIL` setting — it is unused legacy config from the single‑team era, pending removal
 - Do **not** bypass team scoping for convenience
 - Do **not** mutate historical orders
 - Do **not** add frontend logic that assumes a single team
